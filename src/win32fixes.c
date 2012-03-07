@@ -343,4 +343,13 @@ double wstrtod(const char *nptr, char **eptr) {
     return d;
 }
 
+int strerror_r(int err, char* buf, size_t buflen) {
+    char* strerr = strerror(err);
+    if (strlen(strerr) >= buflen) {
+        errno = ERANGE;
+        return -1;
+    }
+    strcpy(buf, strerr);
+    return 0;
+}
 #endif

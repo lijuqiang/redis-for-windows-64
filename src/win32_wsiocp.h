@@ -54,6 +54,7 @@ typedef struct aacceptreq {
 /* per socket information */
 typedef struct aeSockState {
     int masks;
+    int fd;
     aacceptreq *reqs;
     int wreqs;
     OVERLAPPED ov_read;

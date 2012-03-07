@@ -135,17 +135,12 @@ start_server {tags {"repl"}} {
                     stop_write_load $load_handle2
                     stop_write_load $load_handle3
                     stop_write_load $load_handle4
-                    after 1000
-                    set retry 20
-                    while {$retry} {
-                        set digest [$master debug digest]
-                        set digest0 [[lindex $slaves 0] debug digest]
-                        if {$digest0 eq $digest} {
-                            break
-                        }
-                        after 500
+                    set retry 10
+                    while {$retry && ([$master debug digest] ne [[lindex $slaves 0] debug digest])} {
+                        after 1000
                         incr retry -1
                     }
+                    set digest [$master debug digest]
                     set digest0 [[lindex $slaves 0] debug digest]
                     set digest1 [[lindex $slaves 1] debug digest]
                     set digest2 [[lindex $slaves 2] debug digest]

@@ -328,7 +328,7 @@ static client createClient(const char *cmd, size_t len) {
 #ifdef _WIN32
     aeWinSocketAttach(c->context->fd);
 #endif
-    redisSetReplyObjectFunctions(c->context,NULL);
+/*    redisSetReplyObjectFunctions(c->context,NULL); */
     aeCreateFileEvent(config.el,c->context->fd,AE_WRITABLE,writeHandler,c);
     listAddNodeTail(config.clients,c);
     config.liveclients++;

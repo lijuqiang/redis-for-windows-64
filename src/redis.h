@@ -306,6 +306,7 @@ typedef struct redisClient {
     int multibulklen;       /* number of multi bulk arguments left to read */
     long bulklen;           /* length of bulk argument in multi bulk request */
     list *reply;
+    unsigned long reply_bytes; /* Tot bytes of objects in reply list */
     int sentlen;
 #ifdef _WIN32
     int sentobjlen;
@@ -350,6 +351,7 @@ struct sharedObjectsStruct {
 /* Global server state structure */
 struct redisServer {
     pthread_t mainthread;
+    int arch_bits;
     int port;
     char *bindaddr;
     char *unixsocket;
@@ -369,6 +371,7 @@ struct redisServer {
     /* Fast pointers to often looked up command */
     struct redisCommand *delCommand, *multiCommand;
     list *slaves, *monitors;
+    redisClient *current_client; /* Current client, only used on crash report */
     char neterr[ANET_ERR_LEN];
     aeEventLoop *el;
     int cronloops;              /* number of times the cron function run */
@@ -626,6 +629,8 @@ void getClientsMaxBuffers(unsigned long *longest_output_list,
 sds getClientInfoString(redisClient *client);
 sds getAllClientsInfoString(void);
 void rewriteClientCommandVector(redisClient *c, int argc, ...);
+unsigned long getClientOutputBufferMemoryUsage(redisClient *c);
+void flushSlavesOutputBuffers(void);
 
 #ifdef __GNUC__
 void addReplyErrorFormat(redisClient *c, const char *fmt, ...)
@@ -748,7 +753,7 @@ unsigned int zsetLength(robj *zobj);
 void zsetConvert(robj *zobj, int encoding);
 
 /* Core functions */
-void freeMemoryIfNeeded(void);
+int freeMemoryIfNeeded(void);
 int processCommand(redisClient *c);
 void setupSignalHandlers(void);
 struct redisCommand *lookupCommand(sds name);
@@ -957,5 +962,7 @@ void free(void *ptr) __attribute__ ((deprecated));
 void *malloc(size_t size) __attribute__ ((deprecated));
 void *realloc(void *ptr, size_t size) __attribute__ ((deprecated));
 #endif
+
+void redisLogObjectDebugInfo(robj *o);
 
 #endif
