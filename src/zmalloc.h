@@ -79,4 +79,8 @@ size_t zmalloc_get_rss(void);
 void zmalloc_free_used_memory_mutex(void);
 #endif
 
+#ifndef HAVE_MALLOC_SIZE
+size_t zmalloc_size(void *ptr);
+#endif
+
 #endif /* __ZMALLOC_H */

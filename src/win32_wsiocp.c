@@ -34,6 +34,7 @@
 static void *iocpState;
 static HANDLE iocph;
 static fnGetSockState * aeGetSockState;
+static fnDelSockState * aeDelSockState;
 
 static LPFN_ACCEPTEX acceptex;
 static LPFN_GETACCEPTEXSOCKADDRS getaddrs;
@@ -293,12 +294,10 @@ int aeWinSocketSend(int fd, char *buf, int len, int flags,
                     NULL);
 
     if (SUCCEEDED_WITH_IOCP(result == 0)){
-        sockstate->masks |= WRITE_ACTIVE;
         errno = WSA_IO_PENDING;
         sockstate->wreqs++;
     } else {
         errno = WSAGetLastError();
-        sockstate->masks &= ~WRITE_ACTIVE;
         zfree(areq);
     }
     return SOCKET_ERROR;
@@ -362,14 +361,20 @@ int aeWinSocketDetach(int fd, int shutd) {
             int err = WSAGetLastError();
         }
     }
-    sockstate->masks = 0;
+    sockstate->masks &= ~(SOCKET_ATTACHED | AE_WRITABLE | AE_READABLE);
+    if (sockstate->wreqs == 0 && (sockstate->masks & READ_QUEUED) == 0) {
+        // safe to delete sockstate
+        aeDelSockState(iocpState, sockstate);
+    }
     return 0;
 }
 
-void aeWinInit(void *state, HANDLE iocp, fnGetSockState *getSockState) {
+void aeWinInit(void *state, HANDLE iocp, fnGetSockState *getSockState,
+                                        fnDelSockState *delSockState) {
     iocpState = state;
     iocph = iocp;
     aeGetSockState = getSockState;
+    aeDelSockState = delSockState;
 }
 
 void aeWinCleanup() {
