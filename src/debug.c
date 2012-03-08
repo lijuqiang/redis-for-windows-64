@@ -299,6 +299,16 @@ void debugCommand(redisClient *c) {
 
         usleep(utime);
         addReply(c,shared.ok);
+#ifdef _WIN32
+    } else if (!strcasecmp(c->argv[1]->ptr,"flushload")) {
+        emptyDb();
+        if (rdbLoad(server.dbfilename) != REDIS_OK) {
+            addReplyError(c,"Error trying to load the RDB dump");
+            return;
+        }
+        redisLog(REDIS_WARNING,"DB reloaded by DEBUG flushload");
+        addReply(c,shared.ok);
+#endif
     } else {
         addReplyError(c,
             "Syntax error, try DEBUG [SEGFAULT|OBJECT <key>|SWAPIN <key>|SWAPOUT <key>|RELOAD]");

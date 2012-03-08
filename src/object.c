@@ -124,6 +124,11 @@ void freeListObject(robj *o) {
     case REDIS_ENCODING_ZIPLIST:
         zfree(o->ptr);
         break;
+#ifdef _WIN32
+    case REDIS_ENCODING_LINKEDLISTARRAY:
+        cowReleaseListArray(o->ptr);
+        break;
+#endif
     default:
         redisPanic("Unknown list encoding type");
     }
@@ -137,6 +142,11 @@ void freeSetObject(robj *o) {
     case REDIS_ENCODING_INTSET:
         zfree(o->ptr);
         break;
+#ifdef _WIN32
+    case REDIS_ENCODING_HTARRAY:
+        cowReleaseDictArray(o->ptr);
+        break;
+#endif
     default:
         redisPanic("Unknown set encoding type");
     }
@@ -154,6 +164,11 @@ void freeZsetObject(robj *o) {
     case REDIS_ENCODING_ZIPLIST:
         zfree(o->ptr);
         break;
+#ifdef _WIN32
+    case REDIS_ENCODING_HTZARRAY:
+        cowReleaseDictZArray(o->ptr);
+        break;
+#endif
     default:
         redisPanic("Unknown sorted set encoding");
     }
@@ -167,6 +182,11 @@ void freeHashObject(robj *o) {
     case REDIS_ENCODING_ZIPMAP:
         zfree(o->ptr);
         break;
+#ifdef _WIN32
+    case REDIS_ENCODING_HTARRAY:
+        cowReleaseDictArray(o->ptr);
+        break;
+#endif
     default:
         redisPanic("Unknown hash encoding type");
         break;
@@ -182,6 +202,11 @@ void decrRefCount(void *obj) {
 
     if (o->refcount <= 0) redisPanic("decrRefCount against refcount <= 0");
     if (o->refcount == 1) {
+#ifdef _WIN32
+        if (server.isBackgroundSaving == 1) {
+            if (deferFreeObject(o) == 1) return;
+        }
+#endif
         switch(o->type) {
         case REDIS_STRING: freeStringObject(o); break;
         case REDIS_LIST: freeListObject(o); break;
