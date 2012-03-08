@@ -34,8 +34,7 @@ void stopAppendOnly(void) {
     /* rewrite operation in progress? kill it, wait child exit */
     if (server.bgrewritechildpid != -1) {
 #ifdef _WIN32
-        /* Windows placeholder for killing whatever lounched instead of fork()  */
-        w32CeaseAndDesist(server.bgsavechildpid);
+        bkgdsave_termthread();
 #else
         int statloc;
 
@@ -417,7 +416,7 @@ fmterr:
 /* Write a sequence of commands able to fully rebuild the dataset into
  * "filename". Used both by REWRITEAOF and BGREWRITEAOF. */
 int rewriteAppendOnlyFile(char *filename) {
-    dictIterator *di = NULL;
+    roDictIter *di = NULL;
     dictEntry *de;
     FILE *fp;
     char tmpfile[256];
@@ -439,9 +438,26 @@ int rewriteAppendOnlyFile(char *filename) {
     for (j = 0; j < server.dbnum; j++) {
         char selectcmd[] = "*2\r\n$6\r\nSELECT\r\n";
         redisDb *db = server.db+j;
-        dict *d = db->dict;
+        dict *d;
+
+#ifdef _WIN32
+        cowLock();
+        if (server.isBackgroundSaving == 1) {
+            /* use background DB copy */
+            db = server.cowSaveDb+j;
+        }
+        d = db->dict;
+        if (dictSize(d) == 0) {
+            cowUnlock();
+            continue;
+        }
+        di = roDBGetIterator(j);
+        cowUnlock();
+#else
+        d = db->dict;
         if (dictSize(d) == 0) continue;
         di = dictGetSafeIterator(d);
+#endif
         if (!di) {
             fclose(fp);
             return REDIS_ERR;
@@ -452,7 +468,7 @@ int rewriteAppendOnlyFile(char *filename) {
         if (fwriteBulkLongLong(fp,j) == 0) goto werr;
 
         /* Iterate this DB writing every entry */
-        while((de = dictNext(di)) != NULL) {
+        while((de = roDictNext(di)) != NULL) {
             sds keystr = dictGetEntryKey(de);
             robj key, *o;
             time_t expiretime;
@@ -462,10 +478,20 @@ int rewriteAppendOnlyFile(char *filename) {
             initStaticStringObject(key,keystr);
             expiretime = getExpire(db,&key);
 
+            cowLock();
+#ifdef _WIN32
+            if (o->type == REDIS_LIST ||
+                o->type == REDIS_SET ||
+                o->type == REDIS_ZSET ||
+                o->type == REDIS_HASH) {
+                    o = (robj *)getRoConvertedObj(keystr, o);
+            }
+#endif
             /* Save the key and associated value */
             if (o->type == REDIS_STRING) {
                 /* Emit a SET command */
                 char cmd[]="*3\r\n$3\r\nSET\r\n";
+                cowUnlock();
                 if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
                 /* Key and value */
                 if (fwriteBulkObject(fp,&key) == 0) goto werr;
@@ -480,6 +506,7 @@ int rewriteAppendOnlyFile(char *filename) {
                     unsigned int vlen;
                     long long vlong;
 
+                    cowUnlock();
                     while(ziplistGet(p,&vstr,&vlen,&vlong)) {
                         if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
                         if (fwriteBulkObject(fp,&key) == 0) goto werr;
@@ -495,17 +522,36 @@ int rewriteAppendOnlyFile(char *filename) {
                 } else if (o->encoding == REDIS_ENCODING_LINKEDLIST) {
                     list *list = o->ptr;
                     listNode *ln;
-                    listIter li;
+                    roListIter li;
 
-                    listRewind(list,&li);
-                    while((ln = listNext(&li))) {
+                    roListRewind(list, NULL, &li);
+                    cowUnlock();
+                    while((ln = roListNext(&li))) {
                         robj *eleobj = listNodeValue(ln);
 
                         if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
                         if (fwriteBulkObject(fp,&key) == 0) goto werr;
                         if (fwriteBulkObject(fp,eleobj) == 0) goto werr;
                     }
+#ifdef _WIN32
+                } else if (o->encoding == REDIS_ENCODING_LINKEDLISTARRAY) {
+                    cowListArray *ar;
+                    roListIter li;
+                    listNode *ln;
+                    cowUnlock();
+
+                    ar = (cowListArray *)o->ptr;
+                    roListRewind(NULL, ar, &li);
+                    while((ln = roListNext(&li))) {
+                        robj *eleobj = listNodeValue(ln);
+
+                        if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
+                        if (fwriteBulkObject(fp,&key) == 0) goto werr;
+                        if (fwriteBulkObject(fp,eleobj) == 0) goto werr;
+                    }
+#endif
                 } else {
+                    cowUnlock();
                     redisPanic("Unknown list encoding");
                 }
             } else if (o->type == REDIS_SET) {
@@ -515,22 +561,43 @@ int rewriteAppendOnlyFile(char *filename) {
                 if (o->encoding == REDIS_ENCODING_INTSET) {
                     int ii = 0;
                     int64_t llval;
+                    cowUnlock();
                     while(intsetGet(o->ptr,ii++,&llval)) {
                         if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
                         if (fwriteBulkObject(fp,&key) == 0) goto werr;
                         if (fwriteBulkLongLong(fp,llval) == 0) goto werr;
                     }
                 } else if (o->encoding == REDIS_ENCODING_HT) {
-                    dictIterator *di = dictGetIterator(o->ptr);
+                    roDictIter *di;
                     dictEntry *de;
-                    while((de = dictNext(di)) != NULL) {
+                    di = roDictGetIterator(o->ptr, NULL);
+                    cowUnlock();
+                    while((de = roDictNext(di)) != NULL) {
                         robj *eleobj = dictGetEntryKey(de);
                         if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
                         if (fwriteBulkObject(fp,&key) == 0) goto werr;
                         if (fwriteBulkObject(fp,eleobj) == 0) goto werr;
                     }
-                    dictReleaseIterator(di);
+                    roDictReleaseIterator(di);
+#ifdef _WIN32
+                } else if (o->encoding == REDIS_ENCODING_HTARRAY) {
+                    dictEntry *de;
+                    cowDictArray *ar;
+                    roDictIter *di;
+                    cowUnlock();
+
+                    ar = (cowDictArray *)o->ptr;
+                    di = roDictGetIterator(NULL, ar);
+                    while((de = roDictNext(di)) != NULL) {
+                        robj *eleobj = dictGetEntryKey(de);
+                        if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
+                        if (fwriteBulkObject(fp,&key) == 0) goto werr;
+                        if (fwriteBulkObject(fp,eleobj) == 0) goto werr;
+                    }
+                    roDictReleaseIterator(di);
+#endif
                 } else {
+                    cowUnlock();
                     redisPanic("Unknown set encoding");
                 }
             } else if (o->type == REDIS_ZSET) {
@@ -545,6 +612,7 @@ int rewriteAppendOnlyFile(char *filename) {
                     long long vll;
                     double score;
 
+                    cowUnlock();
                     eptr = ziplistIndex(zl,0);
                     redisAssert(eptr != NULL);
                     sptr = ziplistNext(zl,eptr);
@@ -568,10 +636,11 @@ int rewriteAppendOnlyFile(char *filename) {
                     }
                 } else if (o->encoding == REDIS_ENCODING_SKIPLIST) {
                     zset *zs = o->ptr;
-                    dictIterator *di = dictGetIterator(zs->dict);
                     dictEntry *de;
+                    roZDictIter *di = roZDictGetIterator(zs->dict, NULL);
+                    cowUnlock();
 
-                    while((de = dictNext(di)) != NULL) {
+                    while((de = roZDictNext(di)) != NULL) {
                         robj *eleobj = dictGetEntryKey(de);
                         double *score = dictGetEntryVal(de);
 
@@ -580,8 +649,29 @@ int rewriteAppendOnlyFile(char *filename) {
                         if (fwriteBulkDouble(fp,*score) == 0) goto werr;
                         if (fwriteBulkObject(fp,eleobj) == 0) goto werr;
                     }
-                    dictReleaseIterator(di);
+                    roZDictReleaseIterator(di);
+#ifdef _WIN32
+                } else if (o->encoding == REDIS_ENCODING_HTZARRAY) {
+                    dictEntry *de;
+                    cowDictZArray *ar;
+                    roZDictIter *di;
+                    cowUnlock();
+
+                    ar = (cowDictZArray *)o->ptr;
+                    di = roZDictGetIterator(NULL, ar);
+                    while((de = roZDictNext(di)) != NULL) {
+                        robj *eleobj = dictGetEntryKey(de);
+                        double *score = dictGetEntryVal(de);
+
+                        if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
+                        if (fwriteBulkObject(fp,&key) == 0) goto werr;
+                        if (fwriteBulkDouble(fp,*score) == 0) goto werr;
+                        if (fwriteBulkObject(fp,eleobj) == 0) goto werr;
+                    }
+                    roZDictReleaseIterator(di);
+#endif
                 } else {
+                    cowUnlock();
                     redisPanic("Unknown sorted set encoding");
                 }
             } else if (o->type == REDIS_HASH) {
@@ -592,6 +682,7 @@ int rewriteAppendOnlyFile(char *filename) {
                     unsigned char *p = zipmapRewind(o->ptr);
                     unsigned char *field, *val;
                     unsigned int flen, vlen;
+                    cowUnlock();
 
                     while((p = zipmapNext(p,&field,&flen,&val,&vlen)) != NULL) {
                         if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
@@ -601,11 +692,12 @@ int rewriteAppendOnlyFile(char *filename) {
                         if (fwriteBulkString(fp,(char*)val,vlen) == 0)
                             goto werr;
                     }
-                } else {
-                    dictIterator *di = dictGetIterator(o->ptr);
+                } else if (o->encoding == REDIS_ENCODING_HT) {
                     dictEntry *de;
+                    roDictIter *di = roDictGetIterator(o->ptr, NULL);
+                    cowUnlock();
 
-                    while((de = dictNext(di)) != NULL) {
+                    while((de = roDictNext(di)) != NULL) {
                         robj *field = dictGetEntryKey(de);
                         robj *val = dictGetEntryVal(de);
 
@@ -614,9 +706,33 @@ int rewriteAppendOnlyFile(char *filename) {
                         if (fwriteBulkObject(fp,field) == 0) goto werr;
                         if (fwriteBulkObject(fp,val) == 0) goto werr;
                     }
-                    dictReleaseIterator(di);
+                    roDictReleaseIterator(di);
+#ifdef _WIN32
+                } else if (o->encoding == REDIS_ENCODING_HTARRAY) {
+                    dictEntry *de;
+                    cowDictArray *ar;
+                    roDictIter *di;
+                    cowUnlock();
+
+                    ar = (cowDictArray *)o->ptr;
+                    di = roDictGetIterator(NULL, ar);
+                    while((de = roDictNext(di)) != NULL) {
+                        robj *field = dictGetEntryKey(de);
+                        robj *val = dictGetEntryVal(de);
+
+                        if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
+                        if (fwriteBulkObject(fp,&key) == 0) goto werr;
+                        if (fwriteBulkObject(fp,field) == 0) goto werr;
+                        if (fwriteBulkObject(fp,val) == 0) goto werr;
+                    }
+                    roDictReleaseIterator(di);
+                } else {
+                    cowUnlock();
+                    redisPanic("Unknown hash dictionary encoding");
+#endif
                 }
             } else {
+                cowUnlock();
                 redisPanic("Unknown object type");
             }
             /* Save the expire time */
@@ -629,7 +745,7 @@ int rewriteAppendOnlyFile(char *filename) {
                 if (fwriteBulkLongLong(fp,expiretime) == 0) goto werr;
             }
         }
-        dictReleaseIterator(di);
+        roDictReleaseIterator(di);
     }
 
     /* Make sure data will not remain on the OS's output buffers */
@@ -651,7 +767,7 @@ werr:
     fclose(fp);
     unlink(tmpfile);
     redisLog(REDIS_WARNING,"Write error writing append only file on disk: %s", strerror(errno));
-    if (di) dictReleaseIterator(di);
+    if (di) roDictReleaseIterator(di);
     return REDIS_ERR;
 }
 
@@ -667,6 +783,41 @@ werr:
  *    finally will rename(2) the temp file in the actual file name.
  *    The the new file is reopened as the new append only file. Profit!
  */
+#ifdef _WIN32
+int rewriteAppendOnlyFileBackground(void) {
+    pid_t childpid;
+    char tmpfile[256];
+
+    if (server.bgrewritechildpid != -1) return REDIS_ERR;
+    if (server.bgsavechildpid != -1) return REDIS_ERR;
+
+    childpid = getpid();
+    snprintf(tmpfile,256,"temp-rewriteaof-bg-%d.aof", childpid);
+    server.aofrewrite_scheduled = 0;
+    server.bgrewritechildpid = childpid;
+    updateDictResizePolicy();
+    server.appendseldb = -1;
+
+    if (bkgdsave_start(tmpfile, rewriteAppendOnlyFile) == -1) {
+        server.rdbbkgdfsave.background = 0;
+        redisLog(REDIS_NOTICE,
+            "Foreground append only file rewriting started by pid %d", childpid);
+
+        if (rewriteAppendOnlyFile(tmpfile) == REDIS_OK) {
+            backgroundRewriteDoneHandler(0);
+            return REDIS_OK;
+        } else {
+            backgroundRewriteDoneHandler(0xff);
+            redisLog(REDIS_WARNING,
+                "Can't rewrite append only file in background: spoon: %s",
+                strerror(errno));
+            return REDIS_ERR;
+        }
+    }
+    return REDIS_OK; /* unreached */
+}
+
+#else
 int rewriteAppendOnlyFileBackground(void) {
     pid_t childpid;
     long long start;
@@ -688,31 +839,6 @@ int rewriteAppendOnlyFileBackground(void) {
     } else {
         /* Parent */
         server.stat_fork_time = ustime()-start;
-#ifdef _WIN32
-        if (childpid == -1) {
-            char tmpfile[256];
-
-            childpid = getpid();
-            snprintf(tmpfile,256,"temp-rewriteaof-bg-%lld.aof", (long long)childpid);
-            server.bgrewritechildpid = childpid;
-            updateDictResizePolicy();
-            server.appendseldb = -1;
-
-            redisLog(REDIS_NOTICE,
-                "Foreground append only file rewriting started by pid %lld",(long long)childpid);
-
-            if (rewriteAppendOnlyFile(tmpfile) == REDIS_OK) {
-                backgroundRewriteDoneHandler(0);
-                return REDIS_OK;
-            } else {
-                backgroundRewriteDoneHandler(0xff);
-                redisLog(REDIS_WARNING,
-                    "Can't rewrite append only file in background: spoon: %s",
-                    strerror(errno));
-                return REDIS_ERR;
-            }
-        }
-#else
         if (childpid == -1) {
             redisLog(REDIS_WARNING,
                 "Can't rewrite append only file in background: fork: %s",
@@ -723,7 +849,6 @@ int rewriteAppendOnlyFileBackground(void) {
             "Background append only file rewriting started by pid %d",childpid);
         server.aofrewrite_scheduled = 0;
         server.bgrewritechildpid = childpid;
-#endif
         updateDictResizePolicy();
         /* We set appendseldb to -1 in order to force the next call to the
          * feedAppendOnlyFile() to issue a SELECT command, so the differences
@@ -734,6 +859,7 @@ int rewriteAppendOnlyFileBackground(void) {
     }
     return REDIS_OK; /* unreached */
 }
+#endif
 
 void bgrewriteaofCommand(redisClient *c) {
     if (server.bgrewritechildpid != -1) {

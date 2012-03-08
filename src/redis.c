@@ -630,6 +630,21 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 
     /* Check if a background saving or AOF rewrite in progress terminated */
     if (server.bgsavechildpid != -1 || server.bgrewritechildpid != -1) {
+#ifdef _WIN32
+        if (server.rdbbkgdfsave.state == BKSAVE_SUCCESS) {
+            if (server.bgsavechildpid != -1) {
+                backgroundSaveDoneHandler(0);
+            } else {
+                backgroundRewriteDoneHandler(0);
+            }
+        } else if (server.rdbbkgdfsave.state == BKSAVE_FAILED) {
+            if (server.bgsavechildpid != -1) {
+                backgroundSaveDoneHandler(0x100);
+            } else {
+                backgroundRewriteDoneHandler(0x100);
+            }
+        }
+#else
         int statloc;
         pid_t pid;
 
@@ -641,6 +656,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
             }
             updateDictResizePolicy();
         }
+#endif
     } else {
          time_t now = time(NULL);
 
@@ -654,13 +670,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
                 redisLog(REDIS_NOTICE,"%d changes in %d seconds. Saving...",
                     sp->changes, sp->seconds);
                 rdbSaveBackground(server.dbfilename);
-#ifdef _WIN32
-                /* On windows this will save in foreground and block */
-                /* Here we are allready saved, and we should return */
-                return 100;
-#else
                 break;
-#endif
             }
          }
 
@@ -1161,7 +1171,11 @@ int prepareForShutdown() {
        overwrite the synchronous saving did by SHUTDOWN. */
     if (server.bgsavechildpid != -1) {
         redisLog(REDIS_WARNING,"There is a child saving an .rdb. Killing it!");
+#ifdef _WIN32
+        bkgdsave_termthread();
+#else
         kill(server.bgsavechildpid,SIGKILL);
+#endif
         rdbRemoveTempFile(server.bgsavechildpid);
     }
     if (server.appendonly) {
@@ -1170,7 +1184,11 @@ int prepareForShutdown() {
         if (server.bgrewritechildpid != -1) {
             redisLog(REDIS_WARNING,
                 "There is a child rewriting the AOF. Killing it!");
+#ifdef _WIN32
+            bkgdsave_termthread();
+#else
             kill(server.bgrewritechildpid,SIGKILL);
+#endif
         }
         /* Append only file: fsync() the AOF and exit */
         redisLog(REDIS_NOTICE,"Calling fsync() on the AOF file.");
@@ -1805,6 +1823,9 @@ int main(int argc, char **argv) {
     }
     if (server.daemonize) daemonize();
     initServer();
+#ifdef _WIN32
+    cowInit();
+#endif
     if (server.daemonize) createPidFile();
     redisLog(REDIS_NOTICE,"Server started, Redis version " REDIS_VERSION);
 #ifdef __linux__
