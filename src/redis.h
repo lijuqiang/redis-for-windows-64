@@ -20,6 +20,7 @@
 #include <errno.h>
 #ifdef _WIN32
 #include "win32fixes.h"
+#include "win32_bksv.h"
 #else
 #include <pthread.h>
 #include <syslog.h>
@@ -36,6 +37,8 @@
 #include "intset.h" /* Compact integer set structure */
 #include "version.h"
 #include "util.h"
+
+#include "win32_cow.h"
 
 /* Error codes */
 #define REDIS_OK                0
@@ -103,6 +106,11 @@
 #define REDIS_ENCODING_ZIPLIST 5 /* Encoded as ziplist */
 #define REDIS_ENCODING_INTSET 6  /* Encoded as intset */
 #define REDIS_ENCODING_SKIPLIST 7  /* Encoded as skiplist */
+#ifdef _WIN32
+#define REDIS_ENCODING_HTARRAY  12        /* read-only dict array for bgsave */
+#define REDIS_ENCODING_LINKEDLISTARRAY 13 /* read-only list array for bgsave */
+#define REDIS_ENCODING_HTZARRAY  14       /* read-only zset dict array for bgsave */
+#endif
 
 /* Object types only used for dumping to disk */
 #define REDIS_EXPIRETIME 253
@@ -412,6 +420,15 @@ struct redisServer {
     char *pidfile;
     pid_t bgsavechildpid;
     pid_t bgrewritechildpid;
+#ifdef _WIN32
+    bkgdfsave rdbbkgdfsave;
+    dict *cowDictCopied;
+    dict *cowDictConverted;
+    int isBackgroundSaving;
+    bkgdDbExt *cowSaveDbExt;
+    redisDb *cowSaveDb;
+    bkgditers cowCurIters;
+#endif
     sds bgrewritebuf; /* buffer taken by parent during oppend only rewrite */
     sds aofbuf;       /* AOF buffer, written before entering the event loop */
     struct saveparam *saveparams;
@@ -731,6 +748,10 @@ off_t rdbSavedObjectLen(robj *o);
 robj *rdbLoadObject(int type, FILE *fp);
 void backgroundSaveDoneHandler(int statloc);
 int getObjectSaveType(robj *o);
+#ifdef _WIN32
+robj *cowEnsureWriteCopy(redisDb *db, robj *key, robj *val);
+void cowEnsureExpiresCopy(redisDb *db);
+#endif
 
 /* AOF persistence */
 void flushAppendOnlyFile(int force);
