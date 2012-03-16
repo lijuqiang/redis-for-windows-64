@@ -188,12 +188,15 @@ start_server {tags {"other"}} {
     test {BGSAVE large zset copy on write latency} {
         waitForBgsave r
         r flushdb
-        puts "Measuring BGSAVE for 1,000,000 strings in ordered set"
-        set iter1 1000000
-        set step1 1
+        puts "Measuring BGSAVE for $iter1 strings in ordered set"
         set start [clock clicks -milliseconds]
-        for {set i 0} {$i < $iter1} {incr i $step1} {
-            r zadd myzset $i $i
+        for {set i 0} {$i < $iter1} {} {
+            set args {}
+            for {set j 0} {$j < $iter2} {incr j} {
+                lappend args $i $i
+                incr i
+            }
+            r zadd myzset {*}$args
         }
         set elapsed [expr [clock clicks -milliseconds]-$start]
         puts "time to create items                : [expr double($elapsed)/1000]"
