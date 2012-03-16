@@ -226,7 +226,6 @@ int kill(pid_t pid, int sig);
 int fsync (int fd);
 pid_t wait3(int *stat_loc, int options, void *rusage);
 
-int w32CeaseAndDesist(pid_t pid);
 int w32initWinSock(void);
 /* int inet_aton(const char *cp_arg, struct in_addr *addr) */
 
