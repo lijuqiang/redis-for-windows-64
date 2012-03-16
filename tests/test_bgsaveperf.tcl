@@ -155,7 +155,11 @@ proc test_server_main {} {
 
     # Start the client instances
     set ::clients_pids {}
-    set start_port [expr {$::port+100}]
+    if {$::external} {
+      set start_port [expr {$::port}]
+    } else {
+      set start_port [expr {$::port+100}]
+    }
     for {set j 0} {$j < $::numclients} {incr j} {
         set start_port [find_available_port $start_port]
         set p [exec tclsh8.5 [info script] {*}$::argv \
