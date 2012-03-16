@@ -6,16 +6,21 @@ start_server {tags {"other"}} {
         } {ok}
     }
 
+    set iter1 1000000
+    set iter2 100
 
     test {BGSAVE string copy on write latency} {
         waitForBgsave r
         r flushdb
-        puts "Measuring BGSAVE for 1,000,000 strings"
-        set iter1 1000000
-        set step1 1
+        puts "Measuring BGSAVE for $iter1 strings"
         set start [clock clicks -milliseconds]
-        for {set i 0} {$i < $iter1} {incr i $step1} {
-            r set $i abcdefghij
+        for {set i 0} {$i < $iter1} {} {
+            set args {}
+            for {set j 0} {$j < $iter2} {incr j} {
+                lappend args $i "abcdefghij"
+                incr i
+            }
+            r mset {*}$args
         }
         set elapsed [expr [clock clicks -milliseconds]-$start]
         puts "time to create items                : [expr double($elapsed)/1000]"
@@ -51,12 +56,15 @@ start_server {tags {"other"}} {
     test {BGSAVE list copy on write latency} {
         waitForBgsave r
         r flushdb
-        puts "Measuring BGSAVE for 1,000,000 strings in list"
-        set iter1 1000000
-        set step1 1
+        puts "Measuring BGSAVE for $iter1 strings in list"
         set start [clock clicks -milliseconds]
-        for {set i 0} {$i < $iter1} {incr i $step1} {
-          r rpush mylist abcdefghij
+        for {set i 0} {$i < $iter1} {} {
+            set args {}
+            for {set j 0} {$j < $iter2} {incr j} {
+                lappend args "abcdefghij"
+                incr i
+            }
+            r rpush mylist {*}$args
         }
         set elapsed [expr [clock clicks -milliseconds]-$start]
         puts "time to create items                : [expr double($elapsed)/1000]"
@@ -92,12 +100,15 @@ start_server {tags {"other"}} {
     test {BGSAVE hash dictionary copy on write latency} {
         waitForBgsave r
         r flushdb
-        puts "Measuring BGSAVE for 1,000,000 strings in hash dictionary"
-        set iter1 1000000
-        set step1 1
+        puts "Measuring BGSAVE for $iter1 strings in hash dictionary"
         set start [clock clicks -milliseconds]
-        for {set i 0} {$i < $iter1} {incr i $step1} {
-            r hset myhash $i abcdefghij
+        for {set i 0} {$i < $iter1} {} {
+            set args {}
+            for {set j 0} {$j < $iter2} {incr j} {
+                lappend args $i "abcdefghij"
+                incr i
+            }
+            r hmset myhash {*}$args
         }
         set elapsed [expr [clock clicks -milliseconds]-$start]
         puts "time to create items                : [expr double($elapsed)/1000]"
@@ -133,12 +144,15 @@ start_server {tags {"other"}} {
     test {BGSAVE large set copy on write latency} {
         waitForBgsave r
         r flushdb
-        puts "Measuring BGSAVE for 1,000,000 strings in set"
-        set iter1 1000000
-        set step1 1
+        puts "Measuring BGSAVE for $iter1 strings in set"
         set start [clock clicks -milliseconds]
-        for {set i 0} {$i < $iter1} {incr i $step1} {
-            r sadd myset $i
+        for {set i 0} {$i < $iter1} {} {
+            set args {}
+            for {set j 0} {$j < $iter2} {incr j} {
+                lappend args $i
+                incr i
+            }
+            r sadd myset {*}$args
         }
         set elapsed [expr [clock clicks -milliseconds]-$start]
         puts "time to create items                : [expr double($elapsed)/1000]"
@@ -174,12 +188,15 @@ start_server {tags {"other"}} {
     test {BGSAVE large zset copy on write latency} {
         waitForBgsave r
         r flushdb
-        puts "Measuring BGSAVE for 1,000,000 strings in ordered set"
-        set iter1 1000000
-        set step1 1
+        puts "Measuring BGSAVE for $iter1 strings in ordered set"
         set start [clock clicks -milliseconds]
-        for {set i 0} {$i < $iter1} {incr i $step1} {
-            r zadd myzset $i $i
+        for {set i 0} {$i < $iter1} {} {
+            set args {}
+            for {set j 0} {$j < $iter2} {incr j} {
+                lappend args $i $i
+                incr i
+            }
+            r zadd myzset {*}$args
         }
         set elapsed [expr [clock clicks -milliseconds]-$start]
         puts "time to create items                : [expr double($elapsed)/1000]"
