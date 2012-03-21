@@ -54,20 +54,21 @@ typedef struct aacceptreq {
 /* per socket information */
 typedef struct aeSockState {
     int masks;
+    int fd;
     aacceptreq *reqs;
     int wreqs;
     OVERLAPPED ov_read;
 } aeSockState;
 
 typedef aeSockState * fnGetSockState(void *apistate, int fd);
+typedef void fnDelSockState(void *apistate, aeSockState *sockState);
 
 #define READ_QUEUED         0x000100
-#define WRITE_ACTIVE        0x000200
 #define SOCKET_ATTACHED     0x000400
 #define ACCEPT_PENDING      0x000800
 #define LISTEN_SOCK         0x001000
 
-void aeWinInit(void *state, HANDLE iocp, fnGetSockState *getSockState);
+void aeWinInit(void *state, HANDLE iocp, fnGetSockState *getSockState, fnDelSockState *delSockState);
 void aeWinCleanup();
 
 #endif

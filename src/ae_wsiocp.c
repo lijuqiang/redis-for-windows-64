@@ -29,6 +29,7 @@
 #include "ae.h"
 #include "win32fixes.h"
 #include "zmalloc.h"
+#include "adlist.h"
 #include "win32_wsiocp.h"
 #include <mswsock.h>
 #include <Guiddef.h>
@@ -46,23 +47,75 @@ typedef BOOL (WINAPI *sGetQueuedCompletionStatusEx)
               BOOL fAlertable);
 sGetQueuedCompletionStatusEx pGetQueuedCompletionStatusEx;
 
+/* lookup structure for socket
+ * socket value is not an index. Convert socket to index
+  * and then find matching structure in list */
+
+/* prefer prime number for number of indexes */
+#define MAX_SOCKET_LOOKUP   1021
 
 /* structure that keeps state of sockets and Completion port handle */
 typedef struct aeApiState {
     HANDLE iocp;
     int setsize;
     OVERLAPPED_ENTRY entries[MAX_COMPLETE_PER_POLL];
-    aeSockState *sockstate;
+    list lookup[MAX_SOCKET_LOOKUP];
 } aeApiState;
 
+/* convert socket value to an index
+ * Use simple modulo. We can add hash if needed */
+int aeSocketIndex(int fd) {
+    return fd % MAX_SOCKET_LOOKUP;
+}
 
-/* utility to validate that socket / fd is being monitored */
+/* get data for socket / fd being monitored */
 aeSockState *aeGetSockState(void *apistate, int fd) {
+    int sindex;
+    listNode *node;
+    list *socklist;
+    aeSockState *sockState;
     if (apistate == NULL) return NULL;
-    if (fd >= ((aeApiState *)apistate)->setsize) {
-        return NULL;
+
+    sindex = aeSocketIndex(fd);
+    socklist = &(((aeApiState *)apistate)->lookup[sindex]);
+    node = listFirst(socklist);
+    while (node != NULL) {
+        sockState = (aeSockState *)listNodeValue(node);
+        if (sockState->fd == fd) {
+            return sockState;
+        }
+        node = listNextNode(node);
     }
-    return &((aeApiState *)apistate)->sockstate[fd];
+    // not found. Do lazy create of sockState.
+    sockState = (aeSockState *) zmalloc(sizeof(aeSockState));
+    if (sockState != NULL) {
+        sockState->fd = fd;
+        if (listAddNodeHead(socklist, sockState) != NULL) {
+            return sockState;
+        } else {
+            zfree(sockState);
+        }
+    }
+    return NULL;
+}
+
+/* get data for socket / fd being monitored */
+void aeDelSockState(void *apistate, aeSockState *sockState) {
+    int sindex;
+    listNode *node;
+    list *socklist;
+    if (apistate == NULL) return;
+
+    sindex = aeSocketIndex(sockState->fd);
+    socklist = &(((aeApiState *)apistate)->lookup[sindex]);
+    node = listFirst(socklist);
+    while (node != NULL) {
+        if ((aeSockState *)listNodeValue(node) == sockState) {
+            listDelNode(socklist, node);
+            return;
+        }
+        node = listNextNode(node);
+    }
 }
 
 /* Called by ae to initialize state */
@@ -73,19 +126,12 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
     if (!state) return -1;
     memset(state, 0, sizeof(aeApiState));
 
-    state->sockstate = (aeSockState *)zmalloc(sizeof(aeSockState) * AE_SETSIZE);
-    if (state->sockstate == NULL) {
-        zfree(state);
-        return -1;
-    }
-
     /* create a single IOCP to be shared by all sockets */
     state->iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE,
                                          NULL,
                                          0,
                                          1);
     if (state->iocp == NULL) {
-        zfree(state->sockstate);
         zfree(state);
         return -1;
     }
@@ -101,7 +147,7 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
     state->setsize = AE_SETSIZE;
     eventLoop->apidata = state;
     /* initialize the IOCP socket code with state reference */
-    aeWinInit(state, state->iocp, aeGetSockState);
+    aeWinInit(state, state->iocp, aeGetSockState, aeDelSockState);
     return 0;
 }
 
@@ -109,7 +155,6 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
 static void aeApiFree(aeEventLoop *eventLoop) {
     aeApiState *state = (aeApiState *)eventLoop->apidata;
     CloseHandle(state->iocp);
-    zfree(state->sockstate);
     zfree(state);
     aeWinCleanup();
 }
@@ -243,6 +288,10 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
                         numevents++;
                     }
                 }
+            }
+            if (sockstate->wreqs == 0 && (sockstate->masks & (READ_QUEUED | SOCKET_ATTACHED)) == 0) {
+                // safe to delete sockstate
+                aeDelSockState(state, sockstate);
             }
         }
     }
