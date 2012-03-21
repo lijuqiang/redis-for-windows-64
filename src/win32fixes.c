@@ -139,7 +139,7 @@ int replace_random() {
 
 /* BSD sockets compatibile replacement */
 int replace_setsockopt(int socket, int level, int optname, const void *optval, socklen_t optlen) {
-    return (setsockopt)((SOCKET)socket, level, optname, optval, optlen);
+    return (setsockopt)((SOCKET)socket, level, optname, (const char *)optval, optlen);
 }
 
 /* set size with 64bit support */
@@ -343,4 +343,13 @@ double wstrtod(const char *nptr, char **eptr) {
     return d;
 }
 
+int strerror_r(int err, char* buf, size_t buflen) {
+    char* strerr = strerror(err);
+    if (strlen(strerr) >= buflen) {
+        errno = ERANGE;
+        return -1;
+    }
+    strcpy(buf, strerr);
+    return 0;
+}
 #endif

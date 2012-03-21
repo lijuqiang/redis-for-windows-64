@@ -91,6 +91,7 @@
     <ClCompile Include="..\src\intset.c" />
     <ClCompile Include="..\src\lzf_c.c" />
     <ClCompile Include="..\src\lzf_d.c" />
+    <ClCompile Include="..\src\memtest.c" />
     <ClCompile Include="..\src\multi.c" />
     <ClCompile Include="..\src\networking.c" />
     <ClCompile Include="..\src\object.c" />

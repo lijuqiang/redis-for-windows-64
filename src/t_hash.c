@@ -320,7 +320,7 @@ void hmsetCommand(redisClient *c) {
 }
 
 void hincrbyCommand(redisClient *c) {
-    long long value, incr;
+    long long value, incr, oldvalue;
     robj *o, *current, *new;
 
     if (getLongLongFromObjectOrReply(c,c->argv[3],&incr,NULL) != REDIS_OK) return;
@@ -336,6 +336,12 @@ void hincrbyCommand(redisClient *c) {
         value = 0;
     }
 
+    oldvalue = value;
+    if ((incr < 0 && oldvalue < 0 && incr < (LLONG_MIN-oldvalue)) ||
+        (incr > 0 && oldvalue > 0 && incr > (LLONG_MAX-oldvalue))) {
+        addReplyError(c,"increment or decrement would overflow");
+        return;
+    }
     value += incr;
     new = createStringObjectFromLongLong(value);
     hashTypeTryObjectEncoding(o,&c->argv[2],NULL);
