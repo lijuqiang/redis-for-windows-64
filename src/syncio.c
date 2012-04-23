@@ -159,3 +159,52 @@ int fwriteBulkObject(FILE *fp, robj *obj) {
     }
 }
 
+
+#ifdef _WIN32
+int bkgdfsave_fwriteBulkString(FILE *fp, char *s, unsigned long len) {
+    char cbuf[128];
+    int clen;
+    cbuf[0] = '$';
+    clen = 1+ll2string(cbuf+1,sizeof(cbuf)-1,len);
+    cbuf[clen++] = '\r';
+    cbuf[clen++] = '\n';
+    if (bkgdfsave_fwrite(cbuf,clen,1,fp) == 0) return 0;
+    if (len > 0 && bkgdfsave_fwrite(s,len,1,fp) == 0) return 0;
+    if (bkgdfsave_fwrite("\r\n",2,1,fp) == 0) return 0;
+    return 1;
+}
+
+/* Write a double value in bulk format $<count>\r\n<payload>\r\n */
+int bkgdfsave_fwriteBulkDouble(FILE *fp, double d) {
+    char buf[128], dbuf[128];
+
+    snprintf(dbuf,sizeof(dbuf),"%.17g\r\n",d);
+    snprintf(buf,sizeof(buf),"$%lu\r\n",(unsigned long)strlen(dbuf)-2);
+    if (bkgdfsave_fwrite(buf,strlen(buf),1,fp) == 0) return 0;
+    if (bkgdfsave_fwrite(dbuf,strlen(dbuf),1,fp) == 0) return 0;
+    return 1;
+}
+
+/* Write a long value in bulk format $<count>\r\n<payload>\r\n */
+int bkgdfsave_fwriteBulkLongLong(FILE *fp, long long l) {
+    char bbuf[128], lbuf[128];
+    unsigned int blen, llen;
+    llen = ll2string(lbuf,32,l);
+    blen = snprintf(bbuf,sizeof(bbuf),"$%u\r\n%s\r\n",llen,lbuf);
+    if (bkgdfsave_fwrite(bbuf,blen,1,fp) == 0) return 0;
+    return 1;
+}
+
+/* Delegate writing an object to writing a bulk string or bulk long long. */
+int bkgdfsave_fwriteBulkObject(FILE *fp, robj *obj) {
+    /* Avoid using getDecodedObject to help copy-on-write (we are often
+     * in a child process when this function is called). */
+    if (obj->encoding == REDIS_ENCODING_INT) {
+        return bkgdfsave_fwriteBulkLongLong(fp,(long)obj->ptr);
+    } else if (obj->encoding == REDIS_ENCODING_RAW) {
+        return bkgdfsave_fwriteBulkString(fp,obj->ptr,sdslen(obj->ptr));
+    } else {
+        redisPanic("Unknown string encoding");
+    }
+}
+#endif
