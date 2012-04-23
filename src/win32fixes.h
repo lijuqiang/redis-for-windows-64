@@ -1,3 +1,10 @@
+/*
+* Modified by Henry Rawas (henryr@schakra.com)
+*  - make it compatible with Visual Studio builds
+*  - added wstrtod to handle INF, NAN
+*  - added support for using IOCP with sockets
+*/
+
 #ifndef WIN32FIXES_H
 #define WIN32FIXES_H
 

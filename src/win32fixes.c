@@ -1,3 +1,11 @@
+/*
+* Modified by Henry Rawas (henryr@schakra.com)
+*  - make it compatible with Visual Studio builds
+*  - added wstrtod to handle INF, NAN
+*  - added gettimeofday routine
+*  - modified rename to retry after failure
+*/
+
 #ifdef _WIN32
 
 #include <process.h>
