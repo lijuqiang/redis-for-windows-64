@@ -34,8 +34,7 @@ void stopAppendOnly(void) {
     /* rewrite operation in progress? kill it, wait child exit */
     if (server.bgrewritechildpid != -1) {
 #ifdef _WIN32
-        /* Windows placeholder for killing whatever lounched instead of fork()  */
-        w32CeaseAndDesist(server.bgsavechildpid);
+        bkgdsave_termthread();
 #else
         int statloc;
 
@@ -428,7 +427,7 @@ int rewriteAppendOnlyFile(char *filename) {
      * one used by rewriteAppendOnlyFileBackground() function. */
     snprintf(tmpfile,256,"temp-rewriteaof-%d.aof", (int) getpid());
 #ifdef _WIN32
-    fp = fopen(tmpfile,"wb");
+    fp = bkgdfsave_fopen(tmpfile,"wb");
 #else
     fp = fopen(tmpfile,"w");
 #endif
@@ -443,13 +442,23 @@ int rewriteAppendOnlyFile(char *filename) {
         if (dictSize(d) == 0) continue;
         di = dictGetSafeIterator(d);
         if (!di) {
+#ifdef _WIN32
+            bkgdfsave_fclose(fp);
+            bkgdsave_complete(REDIS_ERR);
+#else
             fclose(fp);
+#endif
             return REDIS_ERR;
         }
 
         /* SELECT the new DB */
+#ifdef _WIN32
+        if (bkgdfsave_fwrite(selectcmd,sizeof(selectcmd)-1,1,fp) == 0) goto werr;
+        if (bkgdfsave_fwriteBulkLongLong(fp,j) == 0) goto werr;
+#else
         if (fwrite(selectcmd,sizeof(selectcmd)-1,1,fp) == 0) goto werr;
         if (fwriteBulkLongLong(fp,j) == 0) goto werr;
+#endif
 
         /* Iterate this DB writing every entry */
         while((de = dictNext(di)) != NULL) {
@@ -466,10 +475,17 @@ int rewriteAppendOnlyFile(char *filename) {
             if (o->type == REDIS_STRING) {
                 /* Emit a SET command */
                 char cmd[]="*3\r\n$3\r\nSET\r\n";
+#ifdef _WIN32
+                if (bkgdfsave_fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
+                /* Key and value */
+                if (bkgdfsave_fwriteBulkObject(fp,&key) == 0) goto werr;
+                if (bkgdfsave_fwriteBulkObject(fp,o) == 0) goto werr;
+#else
                 if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
                 /* Key and value */
                 if (fwriteBulkObject(fp,&key) == 0) goto werr;
                 if (fwriteBulkObject(fp,o) == 0) goto werr;
+#endif
             } else if (o->type == REDIS_LIST) {
                 /* Emit the RPUSHes needed to rebuild the list */
                 char cmd[]="*3\r\n$5\r\nRPUSH\r\n";
@@ -481,6 +497,17 @@ int rewriteAppendOnlyFile(char *filename) {
                     long long vlong;
 
                     while(ziplistGet(p,&vstr,&vlen,&vlong)) {
+#ifdef _WIN32
+                        if (bkgdfsave_fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkObject(fp,&key) == 0) goto werr;
+                        if (vstr) {
+                            if (bkgdfsave_fwriteBulkString(fp,(char*)vstr,vlen) == 0)
+                                goto werr;
+                        } else {
+                            if (bkgdfsave_fwriteBulkLongLong(fp,vlong) == 0)
+                                goto werr;
+                        }
+#else
                         if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
                         if (fwriteBulkObject(fp,&key) == 0) goto werr;
                         if (vstr) {
@@ -490,6 +517,7 @@ int rewriteAppendOnlyFile(char *filename) {
                             if (fwriteBulkLongLong(fp,vlong) == 0)
                                 goto werr;
                         }
+#endif
                         p = ziplistNext(zl,p);
                     }
                 } else if (o->encoding == REDIS_ENCODING_LINKEDLIST) {
@@ -500,10 +528,16 @@ int rewriteAppendOnlyFile(char *filename) {
                     listRewind(list,&li);
                     while((ln = listNext(&li))) {
                         robj *eleobj = listNodeValue(ln);
+#ifdef _WIN32
+                        if (bkgdfsave_fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkObject(fp,&key) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkObject(fp,eleobj) == 0) goto werr;
+#else
 
                         if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
                         if (fwriteBulkObject(fp,&key) == 0) goto werr;
                         if (fwriteBulkObject(fp,eleobj) == 0) goto werr;
+#endif
                     }
                 } else {
                     redisPanic("Unknown list encoding");
@@ -516,18 +550,30 @@ int rewriteAppendOnlyFile(char *filename) {
                     int ii = 0;
                     int64_t llval;
                     while(intsetGet(o->ptr,ii++,&llval)) {
+#ifdef _WIN32
+                        if (bkgdfsave_fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkObject(fp,&key) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkLongLong(fp,llval) == 0) goto werr;
+#else
                         if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
                         if (fwriteBulkObject(fp,&key) == 0) goto werr;
                         if (fwriteBulkLongLong(fp,llval) == 0) goto werr;
+#endif
                     }
                 } else if (o->encoding == REDIS_ENCODING_HT) {
                     dictIterator *di = dictGetIterator(o->ptr);
                     dictEntry *de;
                     while((de = dictNext(di)) != NULL) {
                         robj *eleobj = dictGetEntryKey(de);
+#ifdef _WIN32
+                        if (bkgdfsave_fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkObject(fp,&key) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkObject(fp,eleobj) == 0) goto werr;
+#else
                         if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
                         if (fwriteBulkObject(fp,&key) == 0) goto werr;
                         if (fwriteBulkObject(fp,eleobj) == 0) goto werr;
+#endif
                     }
                     dictReleaseIterator(di);
                 } else {
@@ -554,6 +600,18 @@ int rewriteAppendOnlyFile(char *filename) {
                         redisAssert(ziplistGet(eptr,&vstr,&vlen,&vll));
                         score = zzlGetScore(sptr);
 
+#ifdef _WIN32
+                        if (bkgdfsave_fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkObject(fp,&key) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkDouble(fp,score) == 0) goto werr;
+                        if (vstr != NULL) {
+                            if (bkgdfsave_fwriteBulkString(fp,(char*)vstr,vlen) == 0)
+                                goto werr;
+                        } else {
+                            if (bkgdfsave_fwriteBulkLongLong(fp,vll) == 0)
+                                goto werr;
+                        }
+#else
                         if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
                         if (fwriteBulkObject(fp,&key) == 0) goto werr;
                         if (fwriteBulkDouble(fp,score) == 0) goto werr;
@@ -564,6 +622,7 @@ int rewriteAppendOnlyFile(char *filename) {
                             if (fwriteBulkLongLong(fp,vll) == 0)
                                 goto werr;
                         }
+#endif
                         zzlNext(zl,&eptr,&sptr);
                     }
                 } else if (o->encoding == REDIS_ENCODING_SKIPLIST) {
@@ -575,10 +634,17 @@ int rewriteAppendOnlyFile(char *filename) {
                         robj *eleobj = dictGetEntryKey(de);
                         double *score = dictGetEntryVal(de);
 
+#ifdef _WIN32
+                        if (bkgdfsave_fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkObject(fp,&key) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkDouble(fp,*score) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkObject(fp,eleobj) == 0) goto werr;
+#else
                         if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
                         if (fwriteBulkObject(fp,&key) == 0) goto werr;
                         if (fwriteBulkDouble(fp,*score) == 0) goto werr;
                         if (fwriteBulkObject(fp,eleobj) == 0) goto werr;
+#endif
                     }
                     dictReleaseIterator(di);
                 } else {
@@ -594,12 +660,21 @@ int rewriteAppendOnlyFile(char *filename) {
                     unsigned int flen, vlen;
 
                     while((p = zipmapNext(p,&field,&flen,&val,&vlen)) != NULL) {
+#ifdef _WIN32
+                        if (bkgdfsave_fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkObject(fp,&key) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkString(fp,(char*)field,flen) == 0)
+                            goto werr;
+                        if (bkgdfsave_fwriteBulkString(fp,(char*)val,vlen) == 0)
+                            goto werr;
+#else
                         if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
                         if (fwriteBulkObject(fp,&key) == 0) goto werr;
                         if (fwriteBulkString(fp,(char*)field,flen) == 0)
                             goto werr;
                         if (fwriteBulkString(fp,(char*)val,vlen) == 0)
                             goto werr;
+#endif
                     }
                 } else {
                     dictIterator *di = dictGetIterator(o->ptr);
@@ -609,10 +684,17 @@ int rewriteAppendOnlyFile(char *filename) {
                         robj *field = dictGetEntryKey(de);
                         robj *val = dictGetEntryVal(de);
 
+#ifdef _WIN32
+                        if (bkgdfsave_fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkObject(fp,&key) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkObject(fp,field) == 0) goto werr;
+                        if (bkgdfsave_fwriteBulkObject(fp,val) == 0) goto werr;
+#else
                         if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
                         if (fwriteBulkObject(fp,&key) == 0) goto werr;
                         if (fwriteBulkObject(fp,field) == 0) goto werr;
                         if (fwriteBulkObject(fp,val) == 0) goto werr;
+#endif
                     }
                     dictReleaseIterator(di);
                 }
@@ -624,15 +706,36 @@ int rewriteAppendOnlyFile(char *filename) {
                 char cmd[]="*3\r\n$8\r\nEXPIREAT\r\n";
                 /* If this key is already expired skip it */
                 if (expiretime < now) continue;
+#ifdef _WIN32
+                if (bkgdfsave_fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
+                if (bkgdfsave_fwriteBulkObject(fp,&key) == 0) goto werr;
+                if (bkgdfsave_fwriteBulkLongLong(fp,expiretime) == 0) goto werr;
+#else
                 if (fwrite(cmd,sizeof(cmd)-1,1,fp) == 0) goto werr;
                 if (fwriteBulkObject(fp,&key) == 0) goto werr;
                 if (fwriteBulkLongLong(fp,expiretime) == 0) goto werr;
+#endif
             }
         }
         dictReleaseIterator(di);
     }
 
     /* Make sure data will not remain on the OS's output buffers */
+#ifdef _WIN32
+    bkgdfsave_fflush(fp);
+    bkgdfsave_fsync(bkgdfsave_fileno(fp));
+    bkgdfsave_fclose(fp);
+
+    /* Use RENAME to make sure the DB file is changed atomically only
+     * if the generate DB file is ok. */
+    if (bkgdfsave_rename(tmpfile,filename) == -1) {
+        redisLog(REDIS_WARNING,"Error moving temp append only file on the final destination: %s", strerror(errno));
+        bkgdfsave_unlink(tmpfile);
+        bkgdsave_complete(REDIS_ERR);
+        return REDIS_ERR;
+    }
+    bkgdsave_complete(REDIS_OK);
+#else
     fflush(fp);
     aof_fsync(fileno(fp));
     fclose(fp);
@@ -644,12 +747,19 @@ int rewriteAppendOnlyFile(char *filename) {
         unlink(tmpfile);
         return REDIS_ERR;
     }
+#endif
     redisLog(REDIS_NOTICE,"SYNC append only file rewrite performed");
     return REDIS_OK;
 
 werr:
+#ifdef _WIN32
+    bkgdfsave_fclose(fp);
+    bkgdfsave_unlink(tmpfile);
+    bkgdsave_complete(REDIS_ERR);
+#else
     fclose(fp);
     unlink(tmpfile);
+#endif
     redisLog(REDIS_WARNING,"Write error writing append only file on disk: %s", strerror(errno));
     if (di) dictReleaseIterator(di);
     return REDIS_ERR;
@@ -667,6 +777,41 @@ werr:
  *    finally will rename(2) the temp file in the actual file name.
  *    The the new file is reopened as the new append only file. Profit!
  */
+#ifdef _WIN32
+int rewriteAppendOnlyFileBackground(void) {
+    pid_t childpid;
+    char tmpfile[256];
+
+    if (server.bgrewritechildpid != -1) return REDIS_ERR;
+    if (server.bgsavechildpid != -1) return REDIS_ERR;
+
+    childpid = getpid();
+    snprintf(tmpfile,256,"temp-rewriteaof-bg-%d.aof", childpid);
+    server.aofrewrite_scheduled = 0;
+    server.bgrewritechildpid = childpid;
+    updateDictResizePolicy();
+    server.appendseldb = -1;
+
+    if (bkgdsave_start(tmpfile, rewriteAppendOnlyFile) == -1) {
+        server.rdbbkgdfsave.background = 0;
+        redisLog(REDIS_NOTICE,
+            "Foreground append only file rewriting started by pid %d", childpid);
+
+        if (rewriteAppendOnlyFile(tmpfile) == REDIS_OK) {
+            backgroundRewriteDoneHandler(0);
+            return REDIS_OK;
+        } else {
+            backgroundRewriteDoneHandler(0xff);
+            redisLog(REDIS_WARNING,
+                "Can't rewrite append only file in background: spoon: %s",
+                strerror(errno));
+            return REDIS_ERR;
+        }
+    }
+    return REDIS_OK; /* unreached */
+}
+
+#else
 int rewriteAppendOnlyFileBackground(void) {
     pid_t childpid;
     long long start;
@@ -688,31 +833,6 @@ int rewriteAppendOnlyFileBackground(void) {
     } else {
         /* Parent */
         server.stat_fork_time = ustime()-start;
-#ifdef _WIN32
-        if (childpid == -1) {
-            char tmpfile[256];
-
-            childpid = getpid();
-            snprintf(tmpfile,256,"temp-rewriteaof-bg-%lld.aof", (long long)childpid);
-            server.bgrewritechildpid = childpid;
-            updateDictResizePolicy();
-            server.appendseldb = -1;
-
-            redisLog(REDIS_NOTICE,
-                "Foreground append only file rewriting started by pid %lld",(long long)childpid);
-
-            if (rewriteAppendOnlyFile(tmpfile) == REDIS_OK) {
-                backgroundRewriteDoneHandler(0);
-                return REDIS_OK;
-            } else {
-                backgroundRewriteDoneHandler(0xff);
-                redisLog(REDIS_WARNING,
-                    "Can't rewrite append only file in background: spoon: %s",
-                    strerror(errno));
-                return REDIS_ERR;
-            }
-        }
-#else
         if (childpid == -1) {
             redisLog(REDIS_WARNING,
                 "Can't rewrite append only file in background: fork: %s",
@@ -723,7 +843,6 @@ int rewriteAppendOnlyFileBackground(void) {
             "Background append only file rewriting started by pid %d",childpid);
         server.aofrewrite_scheduled = 0;
         server.bgrewritechildpid = childpid;
-#endif
         updateDictResizePolicy();
         /* We set appendseldb to -1 in order to force the next call to the
          * feedAppendOnlyFile() to issue a SELECT command, so the differences
@@ -734,6 +853,7 @@ int rewriteAppendOnlyFileBackground(void) {
     }
     return REDIS_OK; /* unreached */
 }
+#endif
 
 void bgrewriteaofCommand(redisClient *c) {
     if (server.bgrewritechildpid != -1) {
@@ -960,4 +1080,7 @@ cleanup:
     server.bgrewritebuf = sdsempty();
     aofRemoveTempFile(server.bgrewritechildpid);
     server.bgrewritechildpid = -1;
+#ifdef _WIN32
+    server.rdbbkgdfsave.state = BKSAVE_IDLE;
+#endif
 }

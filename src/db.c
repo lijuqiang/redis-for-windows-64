@@ -183,7 +183,11 @@ void flushallCommand(redisClient *c) {
     server.dirty += emptyDb();
     addReply(c,shared.ok);
     if (server.bgsavechildpid != -1) {
+#ifdef _WIN32
+        bkgdsave_termthread();
+#else
         kill(server.bgsavechildpid,SIGKILL);
+#endif
         rdbRemoveTempFile(server.bgsavechildpid);
     }
     if (server.saveparamslen > 0) {

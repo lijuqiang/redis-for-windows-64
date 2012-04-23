@@ -86,36 +86,6 @@ void replicationFeedMonitors(list *monitors, int dictid, robj **argv, int argc) 
     decrRefCount(cmdobj);
 }
 
-#ifdef _WIN32
-/* Win32 may fail in renaming file while it is being read for sending */
-/* if some client is doing bulk transfer, try again when it completes */
-int DelayBkgdSaveForReplication() {
-    listIter li;
-    int sending = 0;
-    listNode *ln;
-
-    listRewind(server.slaves,&li);
-    while((ln = listNext(&li))) {
-        redisClient *slave = ln->value;
-        if (slave->repldbfd != -1) {
-            sending++;
-        }
-    }
-    if (sending > 0) {
-        listRewind(server.slaves,&li);
-        while((ln = listNext(&li))) {
-            redisClient *slave = ln->value;
-            if (slave->replstate == REDIS_REPL_WAIT_BGSAVE_END) {
-                slave->replstate = REDIS_REPL_WAIT_BGSAVE_START;
-            }
-        }
-        redisLog(REDIS_VERBOSE,"Delay starting bgsave for replication");
-        return 1;
-    }
-    return 0;
-}
-#endif
-
 void syncCommand(redisClient *c) {
     /* ignore SYNC if aleady slave or in monitor mode */
     if (c->flags & REDIS_SLAVE) return;
@@ -165,11 +135,6 @@ void syncCommand(redisClient *c) {
             redisLog(REDIS_NOTICE,"Waiting for next BGSAVE for SYNC");
         }
     } else {
-#ifdef _WIN32
-        if (DelayBkgdSaveForReplication() > 0) {
-            c->replstate = REDIS_REPL_WAIT_BGSAVE_START;
-        } else {
-#endif
         /* Ok we don't have a BGSAVE in progress, let's start one */
         redisLog(REDIS_NOTICE,"Starting BGSAVE for SYNC");
         if (rdbSaveBackground(server.dbfilename) != REDIS_OK) {
@@ -178,18 +143,11 @@ void syncCommand(redisClient *c) {
             return;
         }
         c->replstate = REDIS_REPL_WAIT_BGSAVE_END;
-#ifdef _WIN32
-        }
-#endif
     }
     c->repldbfd = -1;
     c->flags |= REDIS_SLAVE;
     c->slaveseldb = 0;
     listAddNodeTail(server.slaves,c);
-#ifdef _WIN32
-    /* Since WIN32 won't fork(),  but instead do Save() we must manualy call this */
-    updateSlavesWaitingBgsave(REDIS_OK);
-#endif
     return;
 }
 
@@ -222,10 +180,9 @@ void sendBulkToSlaveDataDone(aeEventLoop *el, int fd, void *privdata, int nwritt
         }
         addReplySds(slave,sdsempty());
         redisLog(REDIS_NOTICE,"Synchronization with slave succeeded");
-        /* we have have delayed other clients. */
-        updateSlavesWaitingBgsave(REDIS_OK);
     }
 }
+
 void sendBulkToSlave(aeEventLoop *el, int fd, void *privdata, int mask) {
     redisClient *slave = privdata;
     char *buf;
@@ -375,11 +332,6 @@ void updateSlavesWaitingBgsave(int bgsaveerr) {
         }
     }
     if (startbgsave) {
-#ifdef _WIN32
-        if (DelayBkgdSaveForReplication() > 0) {
-            return;
-        }
-#endif
         if (rdbSaveBackground(server.dbfilename) != REDIS_OK) {
             listIter li;
 
