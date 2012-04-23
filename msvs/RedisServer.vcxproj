@@ -113,6 +113,7 @@
     <ClCompile Include="..\src\t_zset.c" />
     <ClCompile Include="..\src\util.c" />
     <ClCompile Include="..\src\win32fixes.c" />
+    <ClCompile Include="..\src\win32_bksv.c" />
     <ClCompile Include="..\src\win32_wsiocp.c" />
     <ClCompile Include="..\src\ziplist.c" />
     <ClCompile Include="..\src\zipmap.c" />
@@ -142,6 +143,7 @@
     <ClInclude Include="..\src\util.h" />
     <ClInclude Include="..\src\version.h" />
     <ClInclude Include="..\src\win32fixes.h" />
+    <ClInclude Include="..\src\win32_bksv.h" />
     <ClInclude Include="..\src\win32_wsiocp.h" />
     <ClInclude Include="..\src\ziplist.h" />
     <ClInclude Include="..\src\zipmap.h" />
