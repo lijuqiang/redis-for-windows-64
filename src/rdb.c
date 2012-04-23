@@ -16,7 +16,11 @@
  * case of an error. It also supports a NULL *fp to skip writing altogether
  * instead of writing to /dev/null. */
 static int rdbWriteRaw(FILE *fp, void *p, size_t len) {
+#ifdef _WIN32
+    if (fp != NULL && bkgdfsave_fwrite(p,len,1,fp) == 0) return -1;
+#else
     if (fp != NULL && fwrite(p,len,1,fp) == 0) return -1;
+#endif
     return len;
 }
 
@@ -397,7 +401,7 @@ int rdbSave(char *filename) {
 
     snprintf(tmpfile,256,"temp-%d.rdb", (int) getpid());
 #ifdef _WIN32
-    fp = fopen(tmpfile,"wb");
+    fp = bkgdfsave_fopen(tmpfile,"wb");
 #else
     fp = fopen(tmpfile,"w");
 #endif
@@ -405,14 +409,23 @@ int rdbSave(char *filename) {
         redisLog(REDIS_WARNING, "Failed saving the DB: %s", strerror(errno));
         return REDIS_ERR;
     }
+#ifdef _WIN32
+    if (bkgdfsave_fwrite("REDIS0002",9,1,fp) == 0) goto werr;
+#else
     if (fwrite("REDIS0002",9,1,fp) == 0) goto werr;
+#endif
     for (j = 0; j < server.dbnum; j++) {
         redisDb *db = server.db+j;
         dict *d = db->dict;
         if (dictSize(d) == 0) continue;
         di = dictGetSafeIterator(d);
         if (!di) {
+#ifdef _WIN32
+            bkgdfsave_fclose(fp);
+            bkgdsave_complete(REDIS_ERR);
+#else
             fclose(fp);
+#endif
             return REDIS_ERR;
         }
 
@@ -450,30 +463,82 @@ int rdbSave(char *filename) {
     if (rdbSaveType(fp,REDIS_EOF) == -1) goto werr;
 
     /* Make sure data will not remain on the OS's output buffers */
+#ifdef _WIN32
+    bkgdfsave_fflush(fp);
+    bkgdfsave_fsync(bkgdfsave_fileno(fp));
+    bkgdfsave_fclose(fp);
+#else
     fflush(fp);
     fsync(fileno(fp));
     fclose(fp);
+#endif
 
     /* Use RENAME to make sure the DB file is changed atomically only
      * if the generate DB file is ok. */
+#ifdef _WIN32
+    if (bkgdfsave_rename(tmpfile, filename) == -1) {
+#else
     if (rename(tmpfile,filename) == -1) {
+#endif
         redisLog(REDIS_WARNING,"Error moving temp DB file on the final destination: %s", strerror(errno));
+#ifdef _WIN32
+        bkgdfsave_unlink(tmpfile);
+        bkgdsave_complete(REDIS_ERR);
+#else
         unlink(tmpfile);
+#endif
         return REDIS_ERR;
     }
+#ifdef _WIN32
+    if (server.rdbbkgdfsave.background != 0)
+        redisLog(REDIS_NOTICE,"DB saved to buffers");
+    else
+        redisLog(REDIS_NOTICE,"DB saved on disk");
+    bkgdsave_complete(REDIS_OK);
+#else
     redisLog(REDIS_NOTICE,"DB saved on disk");
+#endif
     server.dirty = 0;
     server.lastsave = time(NULL);
     return REDIS_OK;
 
 werr:
+#ifdef _WIN32
+    bkgdfsave_fclose(fp);
+    bkgdfsave_unlink(tmpfile);
+    bkgdsave_complete(REDIS_ERR);
+#else
     fclose(fp);
     unlink(tmpfile);
+#endif
     redisLog(REDIS_WARNING,"Write error saving DB on disk: %s", strerror(errno));
     if (di) dictReleaseIterator(di);
     return REDIS_ERR;
 }
 
+
+#ifdef _WIN32
+int rdbSaveBackground(char *filename) {
+    if (server.bgsavechildpid != -1) return REDIS_ERR;
+    if (server.bgrewritechildpid != -1) return REDIS_ERR;
+    server.dirty_before_bgsave = server.dirty;
+
+    server.bgsavechildpid = getpid();
+    if (bkgdsave_start(filename, rdbSave) == -1) {
+        /* couldn't do in background. Do it in foreground */
+        redisLog(REDIS_WARNING,"Background save failed. Trying foreground");
+        server.rdbbkgdfsave.background = 0;
+        if (rdbSave(filename) == REDIS_OK) {
+            backgroundSaveDoneHandler(0);
+            return REDIS_OK;
+        } else {
+            backgroundSaveDoneHandler(0x100);
+            return REDIS_ERR;
+        }
+    }
+    return REDIS_OK;
+}
+#else
 int rdbSaveBackground(char *filename) {
     pid_t childpid;
     long long start;
@@ -483,14 +548,7 @@ int rdbSaveBackground(char *filename) {
     start = ustime();
     if ((childpid = fork()) == 0) {
         /* Child */
-#ifdef _WIN32
-        if (server.ipfd > 0) {
-            aeWinSocketDetach(server.ipfd, 0);
-            closesocket(server.ipfd);
-        }
-#else
         if (server.ipfd > 0) close(server.ipfd);
-#endif
         if (server.sofd > 0) close(server.sofd);
         if (rdbSave(filename) == REDIS_OK) {
             _exit(0);
@@ -501,27 +559,9 @@ int rdbSaveBackground(char *filename) {
         /* Parent */
         server.stat_fork_time = ustime()-start;
         if (childpid == -1) {
-#ifdef _WIN32
-            /* On WIN32 fork() is empty function which always return -1 */
-            /* So, on WIN32, let's just save in foreground. */
-            redisLog(REDIS_NOTICE,"Foregroud saving started by pid %d", getpid());
-            server.bgsavechildpid = getpid();
-            updateDictResizePolicy();
-
-            if (rdbSave(filename) == REDIS_OK) {
-                backgroundSaveDoneHandler(0);
-                return REDIS_OK;
-            } else {
-                redisLog(REDIS_WARNING,"Can't save in background: spoon err: %s",
-                    strerror(errno));
-                backgroundSaveDoneHandler(0xff);
-                return REDIS_ERR;
-            }
-#else
             redisLog(REDIS_WARNING,"Can't save in background: fork: %s",
                 strerror(errno));
             return REDIS_ERR;
-#endif
         }
         redisLog(REDIS_NOTICE,"Background saving started by pid %d",childpid);
         server.bgsavechildpid = childpid;
@@ -530,6 +570,7 @@ int rdbSaveBackground(char *filename) {
     }
     return REDIS_OK; /* unreached */
 }
+#endif
 
 void rdbRemoveTempFile(pid_t childpid) {
     char tmpfile[256];
@@ -1042,6 +1083,9 @@ void backgroundSaveDoneHandler(int statloc) {
         rdbRemoveTempFile(server.bgsavechildpid);
     }
     server.bgsavechildpid = -1;
+#ifdef _WIN32
+    server.rdbbkgdfsave.state = BKSAVE_IDLE;
+#endif
     /* Possibly there are slaves waiting for a BGSAVE in order to be served
      * (the first stage of SYNC is a bulk transfer of dump.rdb) */
     updateSlavesWaitingBgsave(exitcode == 0 ? REDIS_OK : REDIS_ERR);
