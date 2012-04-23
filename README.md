@@ -14,7 +14,8 @@ Special thanks to Dušan Majkic (https://github.com/dmajkic, https://github.com/
 You can use the free Express Edition available at http://www.microsoft.com/visualstudio/en-us/products/2010-editions/visual-cpp-express.
 
 - The new code is on a separate branch so before compiling you need to switch to the new branch:
-    git checkout bksavecow
+<pre><code>git checkout bksavecow</code></pre>
+    
 
 - Open the solution file msvs\redisserver.sln in Visual Studio 10, and build.
 
@@ -29,7 +30,7 @@ You can use the free Express Edition available at http://www.microsoft.com/visua
 
 ### Release Notes
 
-This is a pre-release version of the software and is not yet fully tested.  
+This is a pre-release version of the software and is not yet fully tested. We are keeping the code on a separate branch until testing is completed.  
 This is intended to be a 32bit release only. No work has been done in order to produce a 64bit version of Redis on Windows.
 To run the test suite requires some manual work:
 
