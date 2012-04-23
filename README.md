@@ -13,6 +13,9 @@ Special thanks to Dušan Majkic (https://github.com/dmajkic, https://github.com/
 
 You can use the free Express Edition available at http://www.microsoft.com/visualstudio/en-us/products/2010-editions/visual-cpp-express.
 
+- The new code is on a separate branch so before compiling you need to switch to the new branch:
+    git checkout bksavecow
+
 - Open the solution file msvs\redisserver.sln in Visual Studio 10, and build.
 
     This should create the following executables in the msvs\$(Configuration) folder:
