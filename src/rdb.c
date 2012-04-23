@@ -21,7 +21,7 @@ static int rdbWriteRaw(FILE *fp, void *p, size_t len) {
 #else
     if (fp != NULL && fwrite(p,len,1,fp) == 0) return -1;
 #endif
-    return (int)len;
+    return len;
 }
 
 int rdbSaveType(FILE *fp, unsigned char type) {
