@@ -12,7 +12,6 @@
  *
  * See the Apache License, Version 2.0 for specific language governing
  * permissions and limitations under the License.
-
  */
 
 #include "redis.h"
