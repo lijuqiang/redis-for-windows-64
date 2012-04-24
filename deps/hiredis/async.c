@@ -33,7 +33,7 @@
 #include <stdlib.h>
 #include <string.h>
 #ifndef _WIN32
-  #include <strings.h>
+#include <strings.h>
 #endif
 #include <assert.h>
 #include <ctype.h>
