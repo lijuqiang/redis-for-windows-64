@@ -58,7 +58,9 @@
 #include <limits.h>
 #include <float.h>
 #include <math.h>
+#ifndef _WIN32
 #include <pthread.h>
+#endif
 
 /* Our shared "common" objects */
 
@@ -1793,12 +1795,6 @@ void memtest(size_t megabytes, int passes);
 int main(int argc, char **argv) {
     time_t start;
 
-#ifdef _WIN32
-    /* using pthreads as statically linked library
-       requires initialization */
-    pthread_win32_process_attach_np();
-#endif
-
     initServerConfig();
     if (argc >= 2 && strcmp(argv[1], "--test-memory") == 0) {
         if (argc == 3) {
@@ -1851,11 +1847,6 @@ int main(int argc, char **argv) {
     aeSetBeforeSleepProc(server.el,beforeSleep);
     aeMain(server.el);
     aeDeleteEventLoop(server.el);
-#ifdef _WIN32
-    /* using pthreads as statically linked library
-       requires cleanup */
-    pthread_win32_process_detach_np();
-#endif
     return 0;
 }
 

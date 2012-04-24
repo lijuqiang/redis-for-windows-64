@@ -31,7 +31,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include "win32fixes.h"
+#else
 #include <pthread.h>
+#endif
 #include "config.h"
 #include "zmalloc.h"
 

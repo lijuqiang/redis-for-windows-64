@@ -1,3 +1,10 @@
+/*
+* Modified by Henry Rawas (henryr@schakra.com)
+*  - make it compatible with Visual Studio builds
+*  - added wstrtod to handle INF, NAN
+*  - added support for using IOCP with sockets
+*/
+
 #ifndef WIN32FIXES_H
 #define WIN32FIXES_H
 
@@ -219,6 +226,43 @@ int replace_setsockopt(int socket, int level, int optname,
 #define rename(a,b) replace_rename(a,b)
 int replace_rename(const char *src, const char *dest);
 
+//threads avoiding pthread.h
+
+#define pthread_mutex_t CRITICAL_SECTION
+#define pthread_attr_t ssize_t
+
+#define pthread_mutex_init(a,b) (InitializeCriticalSectionAndSpinCount((a), 0x80000400),0)
+#define pthread_mutex_destroy(a) DeleteCriticalSection((a))
+#define pthread_mutex_lock EnterCriticalSection
+#define pthread_mutex_unlock LeaveCriticalSection
+
+#define pthread_equal(t1, t2) ((t1) == (t2))
+
+#define pthread_attr_init(x) (*(x) = 0)
+#define pthread_attr_getstacksize(x, y) (*(y) = *(x))
+#define pthread_attr_setstacksize(x, y) (*(x) = y)
+
+#define pthread_t u_int
+
+int pthread_create(pthread_t *thread, const void *unused,
+                    void *(*start_routine)(void*), void *arg);
+
+pthread_t pthread_self(void);
+
+typedef struct {
+    CRITICAL_SECTION waiters_lock;
+    LONG waiters;
+    int was_broadcast;
+    HANDLE sema;
+    HANDLE continue_broadcast;
+} pthread_cond_t;
+
+int pthread_cond_init(pthread_cond_t *cond, const void *unused);
+int pthread_cond_destroy(pthread_cond_t *cond);
+int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
+int pthread_cond_signal(pthread_cond_t *cond);
+
+int pthread_detach (pthread_t thread);
 int pthread_sigmask(int how, const sigset_t *set, sigset_t *oset);
 
 /* Misc Unix -> Win32 */
@@ -226,6 +270,7 @@ int kill(pid_t pid, int sig);
 int fsync (int fd);
 pid_t wait3(int *stat_loc, int options, void *rusage);
 
+int w32CeaseAndDesist(pid_t pid);
 int w32initWinSock(void);
 /* int inet_aton(const char *cp_arg, struct in_addr *addr) */
 

@@ -18,11 +18,11 @@
 #include <inttypes.h>
 #endif
 #include <errno.h>
-#include <pthread.h>
 #ifdef _WIN32
 #include "win32fixes.h"
 #include "win32_bksv.h"
 #else
+#include <pthread.h>
 #include <syslog.h>
 #endif
 
