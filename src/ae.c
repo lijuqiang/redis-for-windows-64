@@ -35,8 +35,10 @@
 #ifndef _WIN32
 #include <sys/time.h>
 #include <unistd.h>
+#include <poll.h>
 #endif
 #include <stdlib.h>
+#include <string.h>
 
 #include "ae.h"
 #include "zmalloc.h"
@@ -368,6 +370,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
     return processed; /* return the number of processed file/time events */
 }
 
+#ifdef _WIN32
 /* Wait for millseconds until the given file descriptor becomes
  * writable/readable/exception */
 int aeWait(int fd, int mask, long long milliseconds) {
@@ -391,6 +394,27 @@ int aeWait(int fd, int mask, long long milliseconds) {
         return retval;
     }
 }
+#else
+/* Wait for millseconds until the given file descriptor becomes
+ * writable/readable/exception */
+int aeWait(int fd, int mask, long long milliseconds) {
+    struct pollfd pfd;
+    int retmask = 0, retval;
+
+    memset(&pfd, 0, sizeof(pfd));
+    pfd.fd = fd;
+    if (mask & AE_READABLE) pfd.events |= POLLIN;
+    if (mask & AE_WRITABLE) pfd.events |= POLLOUT;
+
+    if ((retval = poll(&pfd, 1, milliseconds))== 1) {
+        if (pfd.revents & POLLIN) retmask |= AE_READABLE;
+        if (pfd.revents & POLLOUT) retmask |= AE_WRITABLE;
+        return retmask;
+    } else {
+        return retval;
+    }
+}
+#endif
 
 void aeMain(aeEventLoop *eventLoop) {
     eventLoop->stop = 0;

@@ -14,30 +14,6 @@
  * permissions and limitations under the License.
  */
 
-/************************************************************************
- * This module implements copy on write to support
- * saving on a background thread in Windows.
- *
- * Collection objects (dictionaries, lists, sets, zsets)
- *  are copied to a read-only form if a command to modify the
- *  collection is started. This is triggered via lookupKeyWrite().
- *
- * Objects which are modified in place - ziplist, zipset, etc.
- *  are copied before being modified.
- * Strings are normally copied before being modified.
- *
- * In addition deletion of objects is deferred until the save is completed.
- *  This is done by modifying the dictionary delete function, and also
- *  by modifying the decrRefCount function.
- *
- * To allow conversion of collections while the save is iterating on them
- *  special iterators are used. These iterators can be migrated
- *  from their normal mode to iterating over a read-only collection.
- *  Locking is used so that iterator can be used from 2 threads.
- *  For migration to work properly, only one save at a time may run.
- *   (this restriction was already imposed in the Redis code)
- *
- ************************************************************************/
 #include "redis.h"
 
 #ifdef _WIN32
