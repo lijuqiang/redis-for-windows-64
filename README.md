@@ -36,7 +36,9 @@ To run the test suite requires some manual work:
 
 - The tests assume that the binaries are in the src folder, so you need to copy the binaries from the msvs folder to src. 
 - The tests make use of TCL. This must be installed separately.
-- To run the tests you need to install MinGW & TCL and run the following command: `tclsh8.5.exe tests/test_helper.tcl`.
+- To run the tests you need to have a Unix shell on your machine. To execute the tests, run the following command: `tclsh8.5.exe tests/test_helper.tcl`. 
+  
+If a Unix shell is not installed you may see the following error message: "couldn't execute "cat": no such file or directory".
 
 ### Plan for the next release
 
