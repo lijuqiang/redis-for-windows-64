@@ -10,8 +10,8 @@ Redis on Windows prototype
 Special thanks to Dušan Majkic (https://github.com/dmajkic, https://github.com/dmajkic/redis/) for his project on GitHub that gave us the opportunity to quickly learn some on the intricacies of Redis code. His project also helped us to build our prototype quickly.
 
 ## Repo branches
-- Master: save on disk on a separate thread, blocks client requests at the first write request
-- bksave: background save where we write the data to buffers first, then save to disk on a background thread. It is much faster than saving to disk, but it uses more memory. 
+- 2.4: save on disk on a separate thread, blocks client requests at the first write request
+- bksave: background save where we write the data to buffers first, then save to disk on a background thread. It is much faster than saving directly to disk, but it uses more memory. 
 - bksavecow: Copy On Write at the application level
 
 ## How to build Redis using Visual Studio
