@@ -1152,8 +1152,7 @@ int redisBufferRead(redisContext *c) {
  * see if there is a reply available. */
 int redisBufferReadDone(redisContext *c, char *buf, int nread) {
     if (nread == 0) {
-        __redisSetError(c,REDIS_ERR_EOF,
-            sdsnew("Server closed the connection"));
+        __redisSetError(c,REDIS_ERR_EOF, sdsnew("Server closed the connection"));
         return REDIS_ERR;
     } else {
         if (redisReaderFeed(c->reader,buf,nread) != REDIS_OK) {

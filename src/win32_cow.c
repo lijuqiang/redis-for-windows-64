@@ -44,6 +44,7 @@
  *   (this restriction was already imposed in the Redis code)
  *
  ************************************************************************/
+
 #include "redis.h"
 
 #ifdef _WIN32
