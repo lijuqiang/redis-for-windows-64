@@ -10,7 +10,7 @@ Redis on Windows prototype
 Special thanks to Dušan Majkic (https://github.com/dmajkic, https://github.com/dmajkic/redis/) for his project on GitHub that gave us the opportunity to quickly learn some on the intricacies of Redis code. His project also helped us to build our prototype quickly.
 
 ## Repo branches
-- 2.4: save on disk on a separate thread, blocks client requests at the first write request
+- 2.4: save in background
 - bksave: background save where we write the data to buffers first, then save to disk on a background thread. It is much faster than saving directly to disk, but it uses more memory. 
 - bksavecow: Copy On Write at the application level
 
@@ -41,7 +41,7 @@ To run the test suite requires some manual work:
 
 - The tests assume that the binaries are in the src folder, so you need to copy the binaries from the msvs folder to src. 
 - The tests make use of TCL. This must be installed separately.
-- To run the tests you need to install MinGW & TCL and run the following command: `tclsh8.5.exe tests/test_helper.tcl`.
+- To run the tests you need to have a Unix command line shell installed. To run the test: `tclsh8.5.exe tests/test_helper.tcl`. If a Unix command shell is not installed you may see the following error: “couldn't execute "cat": no such file or directory”.
 
 ### Plan for the next release
 
