@@ -13,7 +13,7 @@ Special thanks to Dušan Majkic (https://github.com/dmajkic, https://github.com/
 
 You can use the free Express Edition available at http://www.microsoft.com/visualstudio/en-us/products/2010-editions/visual-cpp-express.
 
-- The new Fork/Copy On Write code is on a separate branch so before compiling you need to switch to the new branch:
+- The new application-level Copy On Write code is on a separate branch so before compiling you need to switch to the new branch:
 <pre><code>git checkout bksavecow</code></pre>
     
 
