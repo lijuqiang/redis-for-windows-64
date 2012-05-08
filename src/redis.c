@@ -1221,8 +1221,13 @@ int prepareForShutdown() {
         unlink(server.pidfile);
     }
     /* Close the listening sockets. Apparently this allows faster restarts. */
+#ifdef _WIN32
+    if (server.ipfd != -1) closesocket(server.ipfd);
+    if (server.sofd != -1) closesocket(server.sofd);
+#else
     if (server.ipfd != -1) close(server.ipfd);
     if (server.sofd != -1) close(server.sofd);
+#endif
     if (server.unixsocket) {
         redisLog(REDIS_NOTICE,"Removing the unix socket file.");
         unlink(server.unixsocket); /* don't care if this fails */
