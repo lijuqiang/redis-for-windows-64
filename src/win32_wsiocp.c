@@ -21,6 +21,7 @@
  */
 
 #include "ae.h"
+#include "adlist.h"
 #include "win32fixes.h"
 #include "zmalloc.h"
 #include <mswsock.h>
@@ -199,6 +200,7 @@ int aeWinAccept(int fd, struct sockaddr *sa, socklen_t *len) {
 
     aeWinSocketAttach(acceptsock);
 
+    zfree(areq->buf);
     zfree(areq);
 
     /* queue another accept */
@@ -293,6 +295,7 @@ int aeWinSocketSend(int fd, char *buf, int len, int flags,
     if (SUCCEEDED_WITH_IOCP(result == 0)){
         errno = WSA_IO_PENDING;
         sockstate->wreqs++;
+        listAddNodeTail(&sockstate->wreqlist, areq);
     } else {
         errno = WSAGetLastError();
         zfree(areq);
@@ -359,10 +362,7 @@ int aeWinSocketDetach(int fd, int shutd) {
         }
     }
     sockstate->masks &= ~(SOCKET_ATTACHED | AE_WRITABLE | AE_READABLE);
-    if (sockstate->wreqs == 0 && (sockstate->masks & READ_QUEUED) == 0) {
-        // safe to delete sockstate
-        aeDelSockState(iocpState, sockstate);
-    }
+    aeDelSockState(iocpState, sockstate);
     return 0;
 }
 
