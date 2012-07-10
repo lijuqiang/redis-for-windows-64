@@ -55,6 +55,7 @@ typedef struct aeSockState {
     aacceptreq *reqs;
     int wreqs;
     OVERLAPPED ov_read;
+    list wreqlist;
 } aeSockState;
 
 typedef aeSockState * fnGetSockState(void *apistate, int fd);
