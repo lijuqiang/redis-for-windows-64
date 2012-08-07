@@ -527,7 +527,12 @@ static int cliReadReply(int output_raw_strings) {
                 out = sdscat(out,"\n");
             }
         }
+#ifdef _WIN32
+        /* if size is too large, fwrite fails. Use fprintf */
+        fprintf(stdout, "%s", out);
+#else
         fwrite(out,sdslen(out),1,stdout);
+#endif
         sdsfree(out);
     }
     freeReplyObject(reply);
