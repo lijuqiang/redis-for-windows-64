@@ -324,8 +324,6 @@ int redisContextConnectTcp(redisContext *c, const char *addr, int port, struct t
 
     sa.sin_family = AF_INET;
     sa.sin_port = htons(port);
-    if (redisSetTcpNoDelay(c,s) != REDIS_OK)
-        return REDIS_ERR;
 
     inAddress = inet_addr(addr);
     if (inAddress == INADDR_NONE || inAddress == INADDR_ANY) {
@@ -336,13 +334,16 @@ int redisContextConnectTcp(redisContext *c, const char *addr, int port, struct t
             __redisSetError(c,REDIS_ERR_OTHER,
                 sdscatprintf(sdsempty(),"can't resolve: %s\n", addr));
             closesocket(s);
-            return REDIS_ERR;;
+            return REDIS_ERR;
         }
         memcpy(&sa.sin_addr, he->h_addr, sizeof(struct in_addr));
     }
     else {
         sa.sin_addr.s_addr = inAddress;
     }
+
+    if (redisSetBlocking(c,s,0) != REDIS_OK)
+        return REDIS_ERR;
 
     if (connect((SOCKET)s, (struct sockaddr*)&sa, sizeof(sa)) == -1) {
         errno = WSAGetLastError();
@@ -355,6 +356,11 @@ int redisContextConnectTcp(redisContext *c, const char *addr, int port, struct t
                 return REDIS_ERR;
         }
     }
+
+    if (blocking && redisSetBlocking(c,s,1) != REDIS_OK)
+            return REDIS_ERR;
+    if (redisSetTcpNoDelay(c,s) != REDIS_OK)
+        return REDIS_ERR;
 
     c->fd = s;
     c->flags |= REDIS_CONNECTED;
