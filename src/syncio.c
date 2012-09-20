@@ -202,7 +202,7 @@ int bkgdfsave_fwriteBulkObject(FILE *fp, robj *obj) {
     if (obj->encoding == REDIS_ENCODING_INT) {
         return bkgdfsave_fwriteBulkLongLong(fp,(long)obj->ptr);
     } else if (obj->encoding == REDIS_ENCODING_RAW) {
-        return bkgdfsave_fwriteBulkString(fp,obj->ptr,sdslen(obj->ptr));
+        return bkgdfsave_fwriteBulkString(fp,obj->ptr,(unsigned long)sdslen(obj->ptr));
     } else {
         redisPanic("Unknown string encoding");
     }

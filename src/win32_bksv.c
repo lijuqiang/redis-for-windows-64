@@ -278,7 +278,7 @@ DWORD WINAPI BkgdSaveThreadProc(LPVOID param) {
     listIter *iter;
     listNode *node;
     FILE *fp = NULL;
-    int rc;
+    size_t rc;
     char *fname;
     HANDLE workorterm[2];
 
@@ -299,7 +299,7 @@ DWORD WINAPI BkgdSaveThreadProc(LPVOID param) {
         /* filename will be overwritten by bkgdfsave_fopen. Save copy to free later */
         fname = server.rdbbkgdfsave.filename;
         server.rdbbkgdfsave.filename = NULL;
-        rc = server.rdbbkgdfsave.bkgdfsave_serialize(fname);
+        server.rdbbkgdfsave.bkgdfsave_serialize(fname);
         zfree(fname);
         server.rdbbkgdfsave.background = 0;
         /* call complete to ensure write commands allowed */
