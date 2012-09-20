@@ -54,16 +54,16 @@ robj *lookupKeyByPattern(redisDb *db, robj *pattern, robj *subst) {
 
     /* Find out if we're dealing with a hash dereference. */
     if ((f = strstr(p+1, "->")) != NULL && *(f+2) != '\0') {
-        fieldlen = sdslen(spat)-(f-spat)-2;
+        fieldlen = (int)(sdslen(spat)-(f-spat)-2);
         fieldobj = createStringObject(f+2,fieldlen);
     } else {
         fieldlen = 0;
     }
 
     /* Perform the '*' substitution. */
-    prefixlen = p-spat;
-    sublen = sdslen(ssub);
-    postfixlen = sdslen(spat)-(prefixlen+1)-(fieldlen ? fieldlen+2 : 0);
+    prefixlen = (int)(p-spat);
+    sublen = (int)sdslen(ssub);
+    postfixlen = (int)(sdslen(spat)-(prefixlen+1)-(fieldlen ? fieldlen+2 : 0));
     keyobj = createStringObject(NULL,prefixlen+sublen+postfixlen);
     k = keyobj->ptr;
     memcpy(k,spat,prefixlen);

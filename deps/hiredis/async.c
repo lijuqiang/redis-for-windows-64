@@ -33,7 +33,7 @@
 #include <stdlib.h>
 #include <string.h>
 #ifndef _WIN32
-  #include <strings.h>
+#include <strings.h>
 #endif
 #include <assert.h>
 #include <ctype.h>
@@ -72,7 +72,7 @@ void __redisAppendCommand(redisContext *c, char *cmd, size_t len);
 
 /* Functions managing dictionary of callbacks for pub/sub. */
 static unsigned int callbackHash(const void *key) {
-    return dictGenHashFunction((unsigned char*)key,sdslen((char*)key));
+    return dictGenHashFunction((unsigned char*)key,(int)sdslen((char*)key));
 }
 
 static void *callbackValDup(void *privdata, const void *src) {
@@ -83,7 +83,7 @@ static void *callbackValDup(void *privdata, const void *src) {
 }
 
 static int callbackKeyCompare(void *privdata, const void *key1, const void *key2) {
-    int l1, l2;
+    size_t l1, l2;
     ((void) privdata);
 
     l1 = sdslen((sds)key1);
@@ -438,7 +438,7 @@ void redisProcessCallbacks(redisAsyncContext *ac) {
 static int __redisAsyncHandleConnect(redisAsyncContext *ac) {
     redisContext *c = &(ac->c);
 
-    if (redisCheckSocketError(c,c->fd) == REDIS_ERR) {
+    if (redisCheckSocketError(c,(int)c->fd) == REDIS_ERR) {
         /* Try again later when connect(2) is still in progress. */
         if (errno == EINPROGRESS)
             return REDIS_OK;

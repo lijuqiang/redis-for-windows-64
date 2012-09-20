@@ -458,7 +458,7 @@ void readSyncBulkPayload(aeEventLoop *el, int fd, void *privdata, int mask) {
             errno = WSAGetLastError();
             redisLog(REDIS_WARNING,"I/O error %d (left %d) trying to sync with MASTER: %s",
                 errno, server.repl_transfer_left,
-                (nread == -1) ? strerror(errno) : "connection lost");
+                (nread == -1) ? wsa_strerror(errno) : "connection lost");
         }
         replicationAbortSyncTransfer();
         return;
@@ -550,7 +550,7 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
         size_t authlen;
 
         authlen = snprintf(authcmd,sizeof(authcmd),"AUTH %s\r\n",server.masterauth);
-        if (syncWrite(fd,authcmd,authlen,server.repl_syncio_timeout) == -1) {
+        if (syncWrite(fd,authcmd,(ssize_t)authlen,server.repl_syncio_timeout) == -1) {
             redisLog(REDIS_WARNING,"Unable to AUTH to MASTER: %s",
                 strerror(errno));
             goto error;

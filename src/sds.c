@@ -140,8 +140,8 @@ sds sdsgrowzero(sds s, size_t len) {
     sh = (void*)(s-(sizeof(struct sdshdr)));
     memset(s+curlen,0,(len-curlen+1)); /* also set trailing \0 byte */
     totlen = sh->len+sh->free;
-    sh->len = len;
-    sh->free = totlen-sh->len;
+    sh->len = (int)len;
+    sh->free = (int)(totlen-sh->len);
     return s;
 }
 

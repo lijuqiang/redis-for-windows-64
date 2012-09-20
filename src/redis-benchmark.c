@@ -120,12 +120,14 @@ static long long mstime(void) {
 
 static void freeClient(client c) {
     listNode *ln;
-    aeDeleteFileEvent(config.el,c->context->fd,AE_WRITABLE);
-    aeDeleteFileEvent(config.el,c->context->fd,AE_READABLE);
+    aeDeleteFileEvent(config.el,(int)c->context->fd,AE_WRITABLE);
+    aeDeleteFileEvent(config.el,(int)c->context->fd,AE_READABLE);
 #ifdef _WIN32
-    aeWinSocketDetach(c->context->fd, 1);
+    aeWinSocketDetach((int)c->context->fd, 1);
 #endif
+  //      printf("Free Socket %d\n", c->context->fd);
     redisFree(c->context);
+    c->context = NULL;
     sdsfree(c->obuf);
     zfree(c);
     config.liveclients--;
@@ -145,9 +147,9 @@ static void freeAllClients(void) {
 }
 
 static void resetClient(client c) {
-    aeDeleteFileEvent(config.el,c->context->fd,AE_WRITABLE);
-    aeDeleteFileEvent(config.el,c->context->fd,AE_READABLE);
-    aeCreateFileEvent(config.el,c->context->fd,AE_WRITABLE,writeHandler,c);
+    aeDeleteFileEvent(config.el,(int)c->context->fd,AE_WRITABLE);
+    aeDeleteFileEvent(config.el,(int)c->context->fd,AE_READABLE);
+    aeCreateFileEvent(config.el,(int)c->context->fd,AE_WRITABLE,writeHandler,c);
     c->written = 0;
     c->pending = config.pipeline;
 }
@@ -205,7 +207,7 @@ static void readHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
         errno = WSAGetLastError();
         if ((errno == ENOENT) || (errno == WSAEWOULDBLOCK)) {
             errno = EAGAIN;
-            aeWinReceiveDone(c->context->fd);
+            aeWinReceiveDone((int)c->context->fd);
             return;
         } else {
             fprintf(stderr,"Error: %s\n",c->context->errstr);
@@ -219,7 +221,7 @@ static void readHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
         exit(1);
     } else {
 #ifdef _WIN32
-        aeWinReceiveDone(c->context->fd);
+        aeWinReceiveDone((int)c->context->fd);
 #endif
         while(c->pending) {
             if (redisGetReply(c->context,&reply) != REDIS_OK) {
@@ -255,8 +257,8 @@ static void writeHandlerDone(aeEventLoop *el, int fd, void *privdata, int nwritt
 
     c->written += nwritten;
     if (sdslen(c->obuf) == c->written) {
-        aeDeleteFileEvent(config.el,c->context->fd,AE_WRITABLE);
-        aeCreateFileEvent(config.el,c->context->fd,AE_READABLE,readHandler,c);
+        aeDeleteFileEvent(config.el,(int)c->context->fd,AE_WRITABLE);
+        aeCreateFileEvent(config.el,(int)c->context->fd,AE_READABLE,readHandler,c);
     }
 }
 #endif
@@ -284,11 +286,11 @@ static void writeHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     if (sdslen(c->obuf) > c->written) {
         void *ptr = c->obuf+c->written;
 #ifdef _WIN32
-        int result = aeWinSocketSend(c->context->fd,ptr,sdslen(c->obuf)-c->written, 0,
+        int result = aeWinSocketSend((int)c->context->fd,(char*)ptr,(int)(sdslen(c->obuf)-c->written), 0,
                                         el, c, NULL, writeHandlerDone);
         if (result == SOCKET_ERROR && errno != WSA_IO_PENDING) {
             if (errno != EPIPE)
-                fprintf(stderr, "Writing to socket: %s\n", strerror(errno));
+                fprintf(stderr, "Writing to socket %s\n", wsa_strerror(errno));
             freeClient(c);
             return;
         }
@@ -345,10 +347,10 @@ static client createClient(char *cmd, size_t len) {
     }
 
 #ifdef _WIN32
-    aeWinSocketAttach(c->context->fd);
+    aeWinSocketAttach((int)c->context->fd);
 #endif
 /*    redisSetReplyObjectFunctions(c->context,NULL); */
-    aeCreateFileEvent(config.el,c->context->fd,AE_WRITABLE,writeHandler,c);
+    aeCreateFileEvent(config.el,(int)c->context->fd,AE_WRITABLE,writeHandler,c);
     listAddNodeTail(config.clients,c);
     config.liveclients++;
     return c;
@@ -556,7 +558,7 @@ int showThroughput(struct aeEventLoop *eventLoop, long long id, void *clientData
  * switch, or if all the tests are selected (no -t passed by user). */
 int test_is_selected(char *name) {
     char buf[256];
-    int l = strlen(name);
+    int l = (int)strlen(name);
 
     if (config.tests == NULL) return 1;
     buf[0] = ',';

@@ -2,26 +2,23 @@ start_server {tags {"repl"}} {
     start_server {} {
         test {First server should have role slave after SLAVEOF} {
             r -1 slaveof [srv 0 host] [srv 0 port]
-            after 1000
-            s -1 role
-        } {slave}
+            wait_for_condition 50 100 {
+                [s -1 role] eq {slave} &&
+                [string match {*master_link_status:up*} [r -1 info]]
+            } else {
+                fail "Can't turn the instance into a slave"
+            }
+        }
 
         test {BRPOPLPUSH replication, when blocking against empty list} {
             set rd [redis_deferring_client]
             $rd brpoplpush a b 5
             r lpush a foo
-            after 1000
-            set digest [r debug digest]
-            set retry 10
-            while {$retry} {
-                after 500
-                set digest0 [r -1 debug digest]
-                if {$digest0 eq $digest} {
-                    break
-                }
-                incr retry -1
+            wait_for_condition 50 100 {
+                [r debug digest] eq [r -1 debug digest]
+            } else {
+                fail "Master and slave have different digest: [r debug digest] VS [r -1 debug digest]"
             }
-            assert_equal [r debug digest] [r -1 debug digest]
         }
 
         test {BRPOPLPUSH replication, list exists} {
@@ -31,16 +28,6 @@ start_server {tags {"repl"}} {
             r lpush c 3
             $rd brpoplpush c d 5
             after 1000
-            set digest [r debug digest]
-            set retry 10
-            while {$retry} {
-                after 500
-                set digest0 [r -1 debug digest]
-                if {$digest0 eq $digest} {
-                    break
-                }
-                incr retry -1
-            }
             assert_equal [r debug digest] [r -1 debug digest]
         }
     }
@@ -74,9 +61,12 @@ start_server {tags {"repl"}} {
         
         test {SET on the master should immediately propagate} {
             r -1 set mykey bar
-            if {$::valgrind} {after 2000} else {after 100}
-            r  0 get mykey
-        } {bar}
+            wait_for_condition 500 100 {
+                [r  0 get mykey] eq {bar}
+            } else {
+                fail "SET on master did not propagated on slave"
+            }
+        }
 
         test {FLUSHALL should replicate} {
             r -1 flushall
@@ -91,7 +81,7 @@ proc start_write_load {host port seconds} {
 }
 
 proc stop_write_load {handle} {
-    catch {exec /bin/kill -9 $handle}
+    kill_proc2 $handle
 }
 
 start_server {tags {"repl"}} {
@@ -99,12 +89,11 @@ start_server {tags {"repl"}} {
     set master_host [srv 0 host]
     set master_port [srv 0 port]
     set slaves {}
-    set load_handle0 [start_write_load $master_host $master_port 20]
-    set load_handle1 [start_write_load $master_host $master_port 20]
+    set load_handle0 [start_write_load $master_host $master_port 3]
+    set load_handle1 [start_write_load $master_host $master_port 5]
     set load_handle2 [start_write_load $master_host $master_port 20]
-    set load_handle3 [start_write_load $master_host $master_port 20]
-    set load_handle4 [start_write_load $master_host $master_port 20]
-    after 2000
+    set load_handle3 [start_write_load $master_host $master_port 8]
+    set load_handle4 [start_write_load $master_host $master_port 4]
     start_server {} {
         lappend slaves [srv 0 client]
         start_server {} {
@@ -117,7 +106,7 @@ start_server {tags {"repl"}} {
                     [lindex $slaves 2] slaveof $master_host $master_port
 
                     # Wait for all the three slaves to reach the "online" state
-                    set retry 100
+                    set retry 500
                     while {$retry} {
                         set info [r -3 info]
                         if {[string match {*slave0:*,online*slave1:*,online*slave2:*,online*} $info]} {
@@ -135,11 +124,25 @@ start_server {tags {"repl"}} {
                     stop_write_load $load_handle2
                     stop_write_load $load_handle3
                     stop_write_load $load_handle4
-                    set retry 10
-                    while {$retry && ([$master debug digest] ne [[lindex $slaves 0] debug digest])} {
-                        after 1000
-                        incr retry -1
+
+                    # Wait that slaves exit the "loading" state
+                    wait_for_condition 500 100 {
+                        ![string match {*loading:1*} [[lindex $slaves 0] info]] &&
+                        ![string match {*loading:1*} [[lindex $slaves 1] info]] &&
+                        ![string match {*loading:1*} [[lindex $slaves 2] info]]
+                    } else {
+                        fail "Slaves still loading data after too much time"
                     }
+                    # Make sure that slaves and master have same number of keys
+                    wait_for_condition 500 100 {
+                        [$master dbsize] == [[lindex $slaves 0] dbsize] &&
+                        [$master dbsize] == [[lindex $slaves 1] dbsize] &&
+                        [$master dbsize] == [[lindex $slaves 2] dbsize]
+                    } else {
+                        fail "Different number of keys between master and slave after too much time."
+                    }
+
+                    # Check digests
                     set digest [$master debug digest]
                     set digest0 [[lindex $slaves 0] debug digest]
                     set digest1 [[lindex $slaves 1] debug digest]
@@ -148,10 +151,6 @@ start_server {tags {"repl"}} {
                     assert {$digest eq $digest0}
                     assert {$digest eq $digest1}
                     assert {$digest eq $digest2}
-                    #puts [$master dbsize]
-                    #puts [[lindex $slaves 0] dbsize]
-                    #puts [[lindex $slaves 1] dbsize]
-                    #puts [[lindex $slaves 2] dbsize]
                 }
            }
         }

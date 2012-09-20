@@ -896,8 +896,15 @@ int getTimeoutFromObjectOrReply(redisClient *c, robj *object, time_t *timeout) {
         return REDIS_ERR;
     }
 
+#ifdef _WIN32
+    if (tval > 0)
+        *timeout = time(NULL) + (time_t)tval;
+    else
+        *timeout = 0;
+#else
     if (tval > 0) tval += (long)time(NULL);
     *timeout = tval;
+#endif
 
     return REDIS_OK;
 }

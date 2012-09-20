@@ -31,6 +31,11 @@
 #include <mswsock.h>
 #include <Guiddef.h>
 
+/* Note: On Win64 a SOCKET is 64 bits, but an int is 32 bits.
+ *       Redis typically uses int where a SOCKET would be used.
+ *       It is safe to cast between SOCKET and int because a
+ *       object handle value is limited to 2^24.  */
+
 /* Use GetQueuedCompletionStatusEx if possible.
  * Try to load the function pointer dynamically.
  * If it is not available, use GetQueuedCompletionStatus */
@@ -256,7 +261,7 @@ static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
 /* stop monitoring state changes for a socket */
 static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int mask) {
     aeApiState *state = (aeApiState *)eventLoop->apidata;
-    aeSockState *sockstate = aeGetSockState(state, fd);
+    aeSockState *sockstate = aeGetExistingSockState(state, fd);
     if (sockstate == NULL) {
         errno = WSAEINVAL;
         return;
@@ -321,7 +326,7 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
         for (j = 0; j < numComplete && numevents < AE_SETSIZE; j++, entry++) {
             /* the competion key is the socket */
             SOCKET sock = (SOCKET)entry->lpCompletionKey;
-            sockstate = aeGetExistingSockState(state, sock);
+            sockstate = aeGetExistingSockState(state, (int)sock);
             if (sockstate == NULL) continue;
 
             if ((sockstate->masks & LISTEN_SOCK) && entry->lpOverlapped != NULL) {
@@ -331,7 +336,7 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
                 sockstate->reqs = areq;
                 sockstate->masks &= ~ACCEPT_PENDING;
                 if (sockstate->masks & AE_READABLE) {
-                    eventLoop->fired[numevents].fd = sock;
+                    eventLoop->fired[numevents].fd = (int)sock;
                     eventLoop->fired[numevents].mask = AE_READABLE;
                     numevents++;
                 }
@@ -342,7 +347,7 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
                     matched = 1;
                     sockstate->masks &= ~READ_QUEUED;
                     if (sockstate->masks & AE_READABLE) {
-                        eventLoop->fired[numevents].fd = sock;
+                        eventLoop->fired[numevents].fd = (int)sock;
                         eventLoop->fired[numevents].mask = AE_READABLE;
                         numevents++;
                     }
@@ -356,21 +361,21 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
                             DWORD written = 0;
                             DWORD flags;
                             WSAGetOverlappedResult(sock, &areq->ov, &written, FALSE, &flags);
-                            areq->proc(areq->eventLoop, sock, &areq->req, (int)written);
+                            areq->proc(areq->eventLoop, (int)sock, &areq->req, (int)written);
                         }
                         sockstate->wreqs--;
                         zfree(areq);
                         /* if no active write requests, set ready to write */
                         if (sockstate->wreqs == 0 && sockstate->masks & AE_WRITABLE) {
-                            eventLoop->fired[numevents].fd = sock;
+                            eventLoop->fired[numevents].fd = (int)sock;
                             eventLoop->fired[numevents].mask = AE_WRITABLE;
                             numevents++;
                         }
                     }
                 }
-
                 if (matched == 0) {
-                    // no match for active connection. Try the closing list.
+                    // no match for active connection.
+                    // Try the closing list since socket value is reused.
                     list *socklist = &(state->closing);
                     listNode *node;
                     node = listFirst(socklist);
@@ -394,7 +399,6 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
                         node = listNextNode(node);
                     }
                 }
-
                 if (matched == 0) {
                     sockstate = NULL;
                 }
@@ -413,6 +417,4 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
 static char *aeApiName(void) {
     return "winsock_IOCP";
 }
-
-
 

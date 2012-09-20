@@ -96,9 +96,9 @@ static int redisCreateSocket(redisContext *c, int type) {
         LINGER l;
         l.l_onoff = 1;
         l.l_linger = 2;
-        setsockopt(s, SOL_SOCKET, SO_LINGER, (const char *) &l, sizeof(l));
+        setsockopt((int)s, SOL_SOCKET, SO_LINGER, (const char *) &l, sizeof(l));
 
-        if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (const char *) &on, sizeof(on)) == -1) {
+        if (setsockopt((int)s, SOL_SOCKET, SO_REUSEADDR, (const char *) &on, sizeof(on)) == -1) {
             __redisSetError(c,REDIS_ERR_IO,NULL);
             closesocket(s);
             return REDIS_ERR;
@@ -286,12 +286,13 @@ int redisCheckSocketError(redisContext *c, int fd) {
 
 #ifdef _WIN32
 int redisContextSetTimeout(redisContext *c, struct timeval tv) {
-    if (setsockopt(c->fd,SOL_SOCKET,SO_RCVTIMEO,(const char *)&tv,sizeof(tv)) == SOCKET_ERROR ) {
+    DWORD ms = (tv.tv_sec * 1000) + (tv.tv_usec / 1000);
+    if (setsockopt((int)c->fd,SOL_SOCKET,SO_RCVTIMEO,(const char *)&ms,sizeof(ms)) == SOCKET_ERROR ) {
         errno = WSAGetLastError();
         __redisSetErrorFromErrno(c,REDIS_ERR_IO,"setsockopt(SO_RCVTIMEO)");
         return REDIS_ERR;
     }
-    if (setsockopt(c->fd,SOL_SOCKET,SO_SNDTIMEO,(const char *)&tv,sizeof(tv)) == SOCKET_ERROR ) {
+    if (setsockopt((int)c->fd,SOL_SOCKET,SO_SNDTIMEO,(const char *)&ms,sizeof(ms)) == SOCKET_ERROR ) {
         errno = WSAGetLastError();
         __redisSetErrorFromErrno(c,REDIS_ERR_IO,"setsockopt(SO_SNDTIMEO)");
         return REDIS_ERR;
@@ -342,7 +343,7 @@ int redisContextConnectTcp(redisContext *c, const char *addr, int port, struct t
         sa.sin_addr.s_addr = inAddress;
     }
 
-    if (redisSetBlocking(c,s,0) != REDIS_OK)
+    if (redisSetTcpNoDelay(c,s) != REDIS_OK)
         return REDIS_ERR;
 
     if (connect((SOCKET)s, (struct sockaddr*)&sa, sizeof(sa)) == -1) {
@@ -357,10 +358,13 @@ int redisContextConnectTcp(redisContext *c, const char *addr, int port, struct t
         }
     }
 
-    if (blocking && redisSetBlocking(c,s,1) != REDIS_OK)
+    if (blocking) {
+        if (redisSetBlocking(c,s,1) != REDIS_OK)
+                return REDIS_ERR;
+    } else {
+        if (redisSetBlocking(c,s,0) != REDIS_OK)
             return REDIS_ERR;
-    if (redisSetTcpNoDelay(c,s) != REDIS_OK)
-        return REDIS_ERR;
+    }
 
     c->fd = s;
     c->flags |= REDIS_CONNECTED;
