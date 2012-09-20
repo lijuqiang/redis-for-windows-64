@@ -134,13 +134,13 @@ static void dictSdsDestructor(void *privdata, void *val)
 }
 
 static unsigned int dictSdsHash(const void *key) {
-    return dictGenHashFunction((unsigned char*)key, sdslen((char*)key));
+    return dictGenHashFunction((unsigned char*)key, (int)sdslen((char*)key));
 }
 
 static int dictSdsKeyCompare(void *privdata, const void *key1,
         const void *key2)
 {
-    int l1,l2;
+    size_t l1,l2;
     DICT_NOTUSED(privdata);
 
     l1 = sdslen((sds)key1);
@@ -200,7 +200,7 @@ cowListArray *cowConvertListToArray(list *olist) {
     cowListArray *lar;
     listNode *lnNew;
     listNode *lnPrev;
-    unsigned int ix = 0;
+    size_t ix = 0;
 
     lar = (cowListArray *)zmalloc(sizeof(cowListArray) + (sizeof(listNode) * olist->len));
 
@@ -235,9 +235,9 @@ void cowReleaseListArray(cowListArray *ar) {
 cowDictArray *cowConvertDictToArray(dict *hdict) {
     dictIterator * di;
     dictEntry *de;
-    int dsize;
+    size_t dsize;
     cowDictArray *dar;
-    int dcount = 0;
+    size_t dcount = 0;
     dictEntry *deNew;
     dictEntry *dePrev;
 
@@ -279,9 +279,9 @@ void cowReleaseDictArray(cowDictArray *ar) {
 cowDictZArray *cowConvertDictToZArray(dict *hdict) {
     dictIterator * di;
     dictEntry *de;
-    int dsize;
+    size_t dsize;
     cowDictZArray *dar;
-    int dcount = 0;
+    size_t dcount = 0;
     dictZEntry *dezNew;
     dictZEntry *dezPrev;
 
@@ -329,7 +329,6 @@ robj *cowListCopy(robj *val) {
     sttime = ustime();
     if (val->encoding == REDIS_ENCODING_ZIPLIST) {
         size_t bytes;
-        redisLog(REDIS_NOTICE, "cowListCopy REDIS_ENCODING_ZIPLIST");
         newval = createZiplistObject();
         /* do raw memory copy */
         bytes = ziplistBlobLen(val->ptr);
@@ -341,7 +340,6 @@ robj *cowListCopy(robj *val) {
         list *list = val->ptr;
         cowListArray *lar;
 
-        redisLog(REDIS_NOTICE, "cowListCopy REDIS_ENCODING_LINKEDLIST");
         lar = cowConvertListToArray(list);
         newval = createObject(REDIS_LIST, lar);
         newval->encoding = REDIS_ENCODING_LINKEDLISTARRAY;
@@ -358,7 +356,6 @@ robj *cowSetCopy(robj *val) {
     robj *newval;
     if (val->encoding == REDIS_ENCODING_INTSET) {
         size_t bytes;
-        redisLog(REDIS_NOTICE, "cowSetCopy REDIS_ENCODING_INTSET");
         newval = createIntsetObject();
         /* do raw memory copy */
         bytes = intsetBlobLen(val->ptr);
@@ -369,7 +366,6 @@ robj *cowSetCopy(robj *val) {
         dict *olddict = (dict *)val->ptr;
         cowDictArray *dar;
 
-        redisLog(REDIS_NOTICE, "cowSetCopy REDIS_ENCODING_HT");
         dar = cowConvertDictToArray(olddict);
         newval = createObject(REDIS_SET, dar);
         newval->encoding = REDIS_ENCODING_HTARRAY;
@@ -387,7 +383,6 @@ robj *cowZSetCopy(robj *val) {
     robj *newval;
     if (val->encoding == REDIS_ENCODING_ZIPLIST) {
         size_t bytes;
-        redisLog(REDIS_NOTICE, "cowZSetCopy REDIS_ENCODING_ZIPLIST");
         newval = createZsetZiplistObject();
         /* do raw memory copy */
         bytes = ziplistBlobLen(val->ptr);
@@ -398,7 +393,6 @@ robj *cowZSetCopy(robj *val) {
         zset *oldzs = (zset *)val->ptr;
         cowDictZArray *dar;
 
-        redisLog(REDIS_NOTICE, "cowZSetCopy REDIS_ENCODING_SKIPLIST");
         dar = cowConvertDictToZArray(oldzs->dict);
         newval = createObject(REDIS_ZSET, dar);
         newval->encoding = REDIS_ENCODING_HTZARRAY;
@@ -416,7 +410,6 @@ robj *cowHashCopy(robj *val) {
     robj *newval = createHashObject();
     if (val->encoding == REDIS_ENCODING_ZIPMAP) {
         size_t bytes;
-        redisLog(REDIS_NOTICE, "cowHashCopy REDIS_ENCODING_ZIPMAP");
         /* do raw memory copy */
         bytes = zipmapBlobLen(val->ptr);
         newval->ptr = zrealloc(newval->ptr, bytes);
@@ -426,7 +419,6 @@ robj *cowHashCopy(robj *val) {
         dict *olddict = (dict *)val->ptr;
         cowDictArray *dar;
 
-        redisLog(REDIS_NOTICE, "cowHashCopy REDIS_ENCODING_HT");
         dar = cowConvertDictToArray(olddict);
         newval = createObject(REDIS_HASH, dar);
         newval->encoding = REDIS_ENCODING_HTARRAY;
@@ -472,7 +464,6 @@ robj *cowEnsureWriteCopy(redisDb *db, robj *key, robj *val) {
         /* no copy needed */
         return val;
     } else {
-        int added = 0;
         sds keyname;
         robj *newval = NULL;
 
@@ -554,7 +545,6 @@ robj *cowEnsureWriteCopy(redisDb *db, robj *key, robj *val) {
             val = newval;
         }
 
-        redisLog(REDIS_NOTICE, "elapsed COW time %d", (unsigned int)(ustime() - sttime));
         return val;
     }
 }
@@ -627,7 +617,6 @@ void cowEnsureExpiresCopy(redisDb *db) {
 /* global init function */
 void cowInit(void) {
     int j;
-    redisLog(REDIS_NOTICE, "cowInit");
     server.isBackgroundSaving = 0;
     server.cowDictCopied = NULL;
     server.cowDictConverted = NULL;
@@ -757,7 +746,7 @@ void *getRoConvertedObj(void *key, void *o) {
 
 /* Iterators for saving */
 
-int roDBDictSize(int id) {
+size_t roDBDictSize(int id) {
     if (server.isBackgroundSaving != 0) {
         if (server.cowSaveDbExt[id].dictArray != NULL) {
             return server.cowSaveDbExt[id].dictArray->numele;

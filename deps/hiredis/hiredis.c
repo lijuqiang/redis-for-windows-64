@@ -121,7 +121,7 @@ static void *createStringObject(const redisReadTask *task, char *str, size_t len
     memcpy(buf,str,len);
     buf[len] = '\0';
     r->str = buf;
-    r->len = len;
+    r->len = (int)len;
 
     if (task->parent) {
         parent = task->parent->obj;
@@ -264,7 +264,7 @@ static char *readBytes(redisReader *r, unsigned int bytes) {
 /* Find pointer to \r\n. */
 static char *seekNewline(char *s, size_t len) {
     int pos = 0;
-    int _len = len-1;
+    int _len = (int)(len-1);
 
     /* Position should be < len-1 because the character at "pos" should be
      * followed by a \n. Note that strchr cannot be used because it doesn't
@@ -324,7 +324,7 @@ static char *readLine(redisReader *r, int *_len) {
     p = r->buf+r->pos;
     s = seekNewline(p,(r->len-r->pos));
     if (s != NULL) {
-        len = s-(r->buf+r->pos);
+        len = (int)(s-(r->buf+r->pos));
         r->pos += len+2; /* skip \r\n */
         if (_len) *_len = len;
         return p;
@@ -407,7 +407,7 @@ static int processBulkItem(redisReader *r) {
     s = seekNewline(p,r->len-r->pos);
     if (s != NULL) {
         p = r->buf+r->pos;
-        bytelen = s-(r->buf+r->pos)+2; /* include \r\n */
+        bytelen = (int)(s-(r->buf+r->pos)+2); /* include \r\n */
         len = readLongLong(p);
 
         if (len < 0) {
@@ -664,7 +664,7 @@ int redisReaderGetReply(redisReader *r, void **reply) {
     /* Discard part of the buffer when we've consumed at least 1k, to avoid
      * doing unnecessary calls to memmove() in sds.c. */
     if (r->pos >= 1024) {
-        r->buf = sdsrange(r->buf,r->pos,-1);
+        r->buf = sdsrange(r->buf,(int)r->pos,-1);
         r->pos = 0;
         r->len = sdslen(r->buf);
     }
@@ -694,7 +694,7 @@ static int intlen(int i) {
 
 /* Helper that calculates the bulk length given a certain string length. */
 static size_t bulklen(size_t len) {
-    return 1+intlen(len)+2+len+2;
+    return (size_t)(1+intlen((int)len)+2+(int)len+2);
 }
 
 int redisvFormatCommand(char **target, const char *format, va_list ap) {
@@ -725,7 +725,7 @@ int redisvFormatCommand(char **target, const char *format, va_list ap) {
                     if (newargv == NULL) goto err;
                     curargv = newargv;
                     curargv[argc++] = curarg;
-                    totlen += bulklen(sdslen(curarg));
+                    totlen += (int)bulklen(sdslen(curarg));
 
                     /* curarg is put in argv so it can be overwritten. */
                     curarg = sdsempty();
@@ -877,7 +877,7 @@ int redisvFormatCommand(char **target, const char *format, va_list ap) {
         if (newargv == NULL) goto err;
         curargv = newargv;
         curargv[argc++] = curarg;
-        totlen += bulklen(sdslen(curarg));
+        totlen += (int)bulklen(sdslen(curarg));
     } else {
         sdsfree(curarg);
     }
@@ -900,7 +900,7 @@ int redisvFormatCommand(char **target, const char *format, va_list ap) {
         pos += sprintf(cmd+pos,"$%zu\r\n",sdslen(curargv[j]));
 #endif
         memcpy(cmd+pos,curargv[j],sdslen(curargv[j]));
-        pos += sdslen(curargv[j]);
+        pos += (int)sdslen(curargv[j]);
         sdsfree(curargv[j]);
         cmd[pos++] = '\r';
         cmd[pos++] = '\n';
@@ -964,7 +964,7 @@ int redisFormatCommandArgv(char **target, int argc, const char **argv, const siz
     totlen = 1+intlen(argc)+2;
     for (j = 0; j < argc; j++) {
         len = argvlen ? argvlen[j] : strlen(argv[j]);
-        totlen += bulklen(len);
+        totlen += (int)bulklen(len);
     }
 
     /* Build the command at protocol level */
@@ -981,7 +981,7 @@ int redisFormatCommandArgv(char **target, int argc, const char **argv, const siz
         pos += sprintf(cmd+pos,"$%zu\r\n",len);
 #endif
         memcpy(cmd+pos,argv[j],len);
-        pos += len;
+        pos += (int)len;
         cmd[pos++] = '\r';
         cmd[pos++] = '\n';
     }
@@ -1181,7 +1181,7 @@ int redisBufferWrite(redisContext *c, int *done) {
 
     if (sdslen(c->obuf) > 0) {
 #ifdef _WIN32
-        nwritten = send((SOCKET)c->fd,c->obuf,sdslen(c->obuf),0);
+        nwritten = send((SOCKET)c->fd,c->obuf,(int)sdslen(c->obuf),0);
         if (nwritten == -1) {
             errno = WSAGetLastError();
             if ((errno == ENOENT) || (errno == WSAEWOULDBLOCK))

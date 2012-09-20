@@ -135,7 +135,7 @@ void setbitCommand(redisClient *c) {
     }
 
     /* Grow sds value to the right length if necessary */
-    byte = bitoffset >> 3;
+    byte = (int)(bitoffset >> 3);
     o->ptr = sdsgrowzero(o->ptr,byte+1);
 
     /* Get current values */
@@ -268,11 +268,11 @@ void getrangeCommand(redisClient *c) {
     }
 
     /* Convert negative indexes */
-    if (start < 0) start = strlen+start;
-    if (end < 0) end = strlen+end;
+    if (start < 0) start = (long)(strlen+start);
+    if (end < 0) end = (long)(strlen+end);
     if (start < 0) start = 0;
     if (end < 0) end = 0;
-    if ((unsigned)end >= strlen) end = strlen-1;
+    if ((unsigned)end >= strlen) end = (long)(strlen-1);
 
     /* Precondition: end >= 0 && end < strlen, so the only condition where
      * nothing can be returned is: start > end. */

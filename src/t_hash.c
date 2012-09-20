@@ -149,7 +149,7 @@ int hashTypeDelete(robj *o, robj *key) {
 /* Return the number of elements in a hash. */
 unsigned long hashTypeLength(robj *o) {
     return (o->encoding == REDIS_ENCODING_ZIPMAP) ?
-        zipmapLen((unsigned char*)o->ptr) : dictSize((dict*)o->ptr);
+        zipmapLen((unsigned char*)o->ptr) : (unsigned long)dictSize((dict*)o->ptr);
 }
 
 hashTypeIterator *hashTypeInitIterator(robj *subject) {

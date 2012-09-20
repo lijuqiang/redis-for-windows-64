@@ -51,10 +51,6 @@ redisClient *createClient(int fd) {
     c->multibulklen = 0;
     c->bulklen = -1;
     c->sentlen = 0;
-#ifdef _WIN32
-    c->sentobjlen = 0;
-    c->sentobj = NULL;
-#endif
     c->flags = 0;
     c->lastinteraction = time(NULL);
     c->authenticated = 0;
@@ -122,7 +118,7 @@ int _addReplyToBuffer(redisClient *c, char *s, size_t len) {
     if (len > available) return REDIS_ERR;
 
     memcpy(c->buf+c->bufpos,s,len);
-    c->bufpos+=len;
+    c->bufpos+=(int)len;
     return REDIS_OK;
 }
 
@@ -134,27 +130,22 @@ void _addReplyObjectToList(redisClient *c, robj *o) {
     if (listLength(c->reply) == 0) {
         incrRefCount(o);
         listAddNodeTail(c->reply,o);
-        c->reply_bytes += zmalloc_size_sds(o->ptr);
+        c->reply_bytes += (unsigned long)zmalloc_size_sds(o->ptr);
     } else {
         tail = listNodeValue(listLast(c->reply));
 
         /* Append to this object when possible. */
-#ifdef _WIN32
-        if (tail->ptr != NULL && tail != c->sentobj &&
-            sdslen(tail->ptr)+sdslen(o->ptr) <= REDIS_REPLY_CHUNK_BYTES)
-#else
         if (tail->ptr != NULL &&
             sdslen(tail->ptr)+sdslen(o->ptr) <= REDIS_REPLY_CHUNK_BYTES)
-#endif
         {
-            c->reply_bytes -= zmalloc_size_sds(tail->ptr);
+            c->reply_bytes -= (unsigned long)zmalloc_size_sds(tail->ptr);
             tail = dupLastObjectIfNeeded(c->reply);
             tail->ptr = sdscatlen(tail->ptr,o->ptr,sdslen(o->ptr));
-            c->reply_bytes += zmalloc_size_sds(tail->ptr);
+            c->reply_bytes += (unsigned long)zmalloc_size_sds(tail->ptr);
         } else {
             incrRefCount(o);
             listAddNodeTail(c->reply,o);
-            c->reply_bytes += zmalloc_size_sds(o->ptr);
+            c->reply_bytes += (unsigned long)zmalloc_size_sds(o->ptr);
         }
     }
 }
@@ -171,27 +162,22 @@ void _addReplySdsToList(redisClient *c, sds s) {
 
     if (listLength(c->reply) == 0) {
         listAddNodeTail(c->reply,createObject(REDIS_STRING,s));
-        c->reply_bytes += zmalloc_size_sds(s);
+        c->reply_bytes += (unsigned long)zmalloc_size_sds(s);
     } else {
         tail = listNodeValue(listLast(c->reply));
 
         /* Append to this object when possible. */
-#ifdef _WIN32
-        if (tail->ptr != NULL && tail != c->sentobj &&
-            sdslen(tail->ptr)+sdslen(s) <= REDIS_REPLY_CHUNK_BYTES)
-#else
         if (tail->ptr != NULL &&
             sdslen(tail->ptr)+sdslen(s) <= REDIS_REPLY_CHUNK_BYTES)
-#endif
         {
-            c->reply_bytes -= zmalloc_size_sds(tail->ptr);
+            c->reply_bytes -= (unsigned long)zmalloc_size_sds(tail->ptr);
             tail = dupLastObjectIfNeeded(c->reply);
             tail->ptr = sdscatlen(tail->ptr,s,sdslen(s));
-            c->reply_bytes += zmalloc_size_sds(tail->ptr);
+            c->reply_bytes += (unsigned long)zmalloc_size_sds(tail->ptr);
             sdsfree(s);
         } else {
             listAddNodeTail(c->reply,createObject(REDIS_STRING,s));
-            c->reply_bytes += zmalloc_size_sds(s);
+            c->reply_bytes += (unsigned long)zmalloc_size_sds(s);
         }
     }
 }
@@ -205,28 +191,23 @@ void _addReplyStringToList(redisClient *c, char *s, size_t len) {
         robj *o = createStringObject(s,len);
 
         listAddNodeTail(c->reply,o);
-        c->reply_bytes += zmalloc_size_sds(o->ptr);
+        c->reply_bytes += (unsigned long)zmalloc_size_sds(o->ptr);
     } else {
         tail = listNodeValue(listLast(c->reply));
 
         /* Append to this object when possible. */
-#ifdef _WIN32
-        if (tail->ptr != NULL && tail != c->sentobj &&
-            sdslen(tail->ptr)+len <= REDIS_REPLY_CHUNK_BYTES)
-#else
         if (tail->ptr != NULL &&
             sdslen(tail->ptr)+len <= REDIS_REPLY_CHUNK_BYTES)
-#endif
         {
-            c->reply_bytes -= zmalloc_size_sds(tail->ptr);
+            c->reply_bytes -= (unsigned long)zmalloc_size_sds(tail->ptr);
             tail = dupLastObjectIfNeeded(c->reply);
             tail->ptr = sdscatlen(tail->ptr,s,len);
-            c->reply_bytes += zmalloc_size_sds(tail->ptr);
+            c->reply_bytes += (unsigned long)zmalloc_size_sds(tail->ptr);
         } else {
             robj *o = createStringObject(s,len);
 
             listAddNodeTail(c->reply,o);
-            c->reply_bytes += zmalloc_size_sds(o->ptr);
+            c->reply_bytes += (unsigned long)zmalloc_size_sds(o->ptr);
         }
     }
 }
@@ -341,7 +322,7 @@ void setDeferredMultiBulkLength(redisClient *c, void *node, long length) {
 
     len = listNodeValue(ln);
     len->ptr = sdscatprintf(sdsempty(),"*%ld\r\n",length);
-    c->reply_bytes += zmalloc_size_sds(len->ptr);
+    c->reply_bytes += (unsigned long)zmalloc_size_sds(len->ptr);
     if (ln->next != NULL) {
         next = listNodeValue(ln->next);
 
@@ -631,7 +612,7 @@ void freeClient(redisClient *c) {
 void sendReplyBufferDone(aeEventLoop *el, int fd, void *privdata, int written) {
     aeWinSendReq *req = (aeWinSendReq *)privdata;
     redisClient *c = (redisClient *)req->client;
-    int offset = req->buf - (char *)req->data + written;
+    int offset = (int)(req->buf - (char *)req->data + written);
     REDIS_NOTUSED(el);
     REDIS_NOTUSED(fd);
 
@@ -640,8 +621,6 @@ void sendReplyBufferDone(aeEventLoop *el, int fd, void *privdata, int written) {
         c->sentlen = 0;
     }
     if (c->bufpos == 0 && listLength(c->reply) == 0) {
-        c->sentobjlen = 0;
-        c->sentobj = NULL;
         aeDeleteFileEvent(server.el,c->fd,AE_WRITABLE);
 
         /* Close connection after entire reply has been sent. */
@@ -655,29 +634,13 @@ void sendReplyListDone(aeEventLoop *el, int fd, void *privdata, int written) {
     aeWinSendReq *req = (aeWinSendReq *)privdata;
     redisClient *c = (redisClient *)req->client;
     robj *o = (robj *)req->data;
-    int objlen = sdslen(o->ptr);
-    int offset = req->buf - (char *)o->ptr + written;
-    listNode *ln;
-    listIter li;
     REDIS_NOTUSED(el);
     REDIS_NOTUSED(fd);
 
-    // if offset matches length, find item in list and remove
-    if (objlen == offset) {
-        listRewind(c->reply, &li);
-        while ((ln = listNext(&li)) != NULL) {
-            if (o == listNodeValue(ln)) {
-                listDelNode(c->reply, ln);
-                break;
-            }
-        }
-    }
     decrRefCount(o);
 
     if (c->bufpos == 0 && listLength(c->reply) == 0) {
         c->sentlen = 0;
-        c->sentobjlen = 0;
-        c->sentobj = NULL;
         aeDeleteFileEvent(server.el,c->fd,AE_WRITABLE);
 
         /* Close connection after entire reply has been sent. */
@@ -690,7 +653,6 @@ void sendReplyListDone(aeEventLoop *el, int fd, void *privdata, int written) {
 void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     redisClient *c = (redisClient *)privdata;
     int nwritten = 0, totwritten = 0, objlen;
-    int objpos = 0;
     size_t objmem;
     robj *o;
     int result = 0;
@@ -713,29 +675,14 @@ void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     /* move list pointer to last one sent or first in list */
     listRewind(c->reply, &li);
     ln = listNext(&li);
-    if (c->sentobj != NULL) {
-        int found = 0;
-        while (ln != NULL) {
-            if (c->sentobj == listNodeValue(ln)) {
-                found = 1;
-                objpos = c->sentobjlen;
-                break;
-            }
-            ln = listNext(&li);
-        }
-        if (found == 0) {
-            listRewind(c->reply, &li);
-            ln = listNext(&li);
-        }
-    }
- 
+
     while(c->bufpos > c->sentlen || ln != NULL) {
         if (c->bufpos > c->sentlen) {
             nwritten = c->bufpos - c->sentlen;
             result = aeWinSocketSend(fd,c->buf+c->sentlen, nwritten,0,
                                         el, c, c->buf, sendReplyBufferDone);
             if (result == SOCKET_ERROR && errno != WSA_IO_PENDING) {
-                redisLog(REDIS_VERBOSE, "Error writing to client: %s", strerror(errno));
+                redisLog(REDIS_VERBOSE, "Error writing to client: %s", wsa_strerror(errno));
                 freeClient(c);
                 return;
             }
@@ -744,7 +691,7 @@ void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask) {
 
         } else {
             o = listNodeValue(ln);
-            objlen = sdslen(o->ptr);
+            objlen = (int)sdslen(o->ptr);
             objmem = zmalloc_size_sds(o->ptr);
 
             if (objlen == 0) {
@@ -753,24 +700,21 @@ void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask) {
                 continue;
             }
 
-            if (objlen - objpos > 0) {
-                incrRefCount(o);
-                /* need to remember length sent for last object, as more may be added */
-                result = aeWinSocketSend(fd, ((char*)o->ptr)+objpos, objlen-objpos, 0,
-                                            el, c, o, sendReplyListDone);
-                if (result == SOCKET_ERROR && errno != WSA_IO_PENDING) {
-                    redisLog(REDIS_VERBOSE,
-                        "Error writing to client: %s", strerror(errno));
-                    decrRefCount(o);
-                    freeClient(c);
-                    return;
-                }
-                totwritten += objlen-objpos;
-                objpos = 0;
-                c->sentobjlen = objlen;
-                c->sentobj = o;
-                c->reply_bytes -= objmem;
+            /* object ref placed in request, release in sendReplyListDone */
+            incrRefCount(o);
+            result = aeWinSocketSend(fd, ((char*)o->ptr), objlen, 0,
+                                        el, c, o, sendReplyListDone);
+            if (result == SOCKET_ERROR && errno != WSA_IO_PENDING) {
+                redisLog(REDIS_VERBOSE,
+                    "Error writing to client: %s", wsa_strerror(errno));
+                decrRefCount(o);
+                freeClient(c);
+                return;
             }
+            totwritten += objlen;
+            /* remove from list - object kept alive due to incrRefCount */
+            listDelNode(c->reply,listFirst(c->reply));
+            c->reply_bytes -= (unsigned long)objmem;
             ln = listNext(&li);
         }
         /* Note that we avoid to send more than REDIS_MAX_WRITE_PER_EVENT
@@ -929,10 +873,10 @@ int processInlineBuffer(redisClient *c) {
 
     /* Split the input buffer up to the \r\n */
     querylen = newline-(c->querybuf);
-    argv = sdssplitlen(c->querybuf,querylen," ",1,&argc);
+    argv = sdssplitlen(c->querybuf,(int)querylen," ",1,&argc);
 
     /* Leave data after the first line of the query in the buffer */
-    c->querybuf = sdsrange(c->querybuf,querylen+2,-1);
+    c->querybuf = sdsrange(c->querybuf,(int)(querylen+2),-1);
 
     /* Setup argv array on client structure */
     if (c->argv) zfree(c->argv);
@@ -997,7 +941,7 @@ int processMultibulkBuffer(redisClient *c) {
             return REDIS_ERR;
         }
 
-        pos = (newline-c->querybuf)+2;
+        pos = (int)(newline-c->querybuf)+2;
         if (ll <= 0) {
             c->querybuf = sdsrange(c->querybuf,pos,-1);
             return REDIS_OK;
@@ -1042,7 +986,7 @@ int processMultibulkBuffer(redisClient *c) {
                 return REDIS_ERR;
             }
 
-            pos += newline-(c->querybuf+pos)+2;
+            pos += (int)(newline-(c->querybuf+pos)+2);
             c->bulklen = (long)ll;
         }
 
@@ -1137,7 +1081,11 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
         if (errno == EAGAIN) {
             nread = 0;
         } else {
+#ifdef _WIN32
+            redisLog(REDIS_VERBOSE, "Reading from client: %s",wsa_strerror(errno));
+#else
             redisLog(REDIS_VERBOSE, "Reading from client: %s",strerror(errno));
+#endif
             freeClient(c);
             return;
         }
@@ -1182,7 +1130,7 @@ void getClientsMaxBuffers(unsigned long *longest_output_list,
         c = listNodeValue(ln);
 
         if (listLength(c->reply) > lol) lol = listLength(c->reply);
-        if (sdslen(c->querybuf) > bib) bib = sdslen(c->querybuf);
+        if (sdslen(c->querybuf) > bib) bib = (unsigned long)sdslen(c->querybuf);
     }
     *longest_output_list = lol;
     *biggest_input_buffer = bib;

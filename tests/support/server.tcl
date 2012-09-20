@@ -96,6 +96,12 @@ if { $tcl_platform(platform) == "windows" } {
     }
 }
 
+if { $tcl_platform(platform) == "windows" } {
+    proc kill_proc2 pid {
+        catch {exec taskkill.exe -F -T -PID $pid}
+    }
+}
+
 if { $tcl_platform(platform) != "windows" } {
   proc is_alive config {
       set pid [dict get $config pid]
@@ -111,6 +117,12 @@ if { $tcl_platform(platform) != "windows" } {
     proc kill_proc config {
         set pid [dict get $config pid]
         catch {exec kill $pid}
+    }
+}
+
+if { $tcl_platform(platform) != "windows" } {
+    proc kill_proc2 pid {
+        catch {exec kill -9 $pid}
     }
 }
 

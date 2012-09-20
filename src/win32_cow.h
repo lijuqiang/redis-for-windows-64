@@ -28,12 +28,12 @@
 
 /* collections are converted to read only arrays */
 typedef struct cowListArray {
-    int numele;
+    size_t numele;
     listNode le[];
 } cowListArray;
 
 typedef struct cowDictArray {
-    int numele;
+    size_t numele;
     dictEntry de[];
 } cowDictArray;
 
@@ -43,7 +43,7 @@ typedef struct dictZEntry {
 } dictZEntry;
 
 typedef struct cowDictZArray {
-    int numele;
+    size_t numele;
     dictZEntry zde[];
 } cowDictZArray;
 
@@ -55,7 +55,7 @@ typedef struct roDictIter {
     cowDictArray *ar;
     dict *hdict;
     dictIterator *di;
-    int pos;
+    size_t pos;
 } roDictIter;
 
 /* Special read only iterator for zset hash dictionary can iterate over
@@ -66,7 +66,7 @@ typedef struct roZDictIter {
     cowDictZArray *ar;
     dict *hdict;
     dictIterator *di;
-    int pos;
+    size_t pos;
 } roZDictIter;
 
 /* Special read only iterator for list can iterate over
@@ -77,7 +77,7 @@ typedef struct roListIter {
     cowListArray *ar;
     list *olist;
     listIter li;
-    int pos;
+    size_t pos;
 } roListIter;
 
 /* current iterators in use.
@@ -110,7 +110,7 @@ void cowBkgdSaveStop();
 void cowLock();
 void cowUnlock();
 int deferFreeObject(void *obj);
-int roDBDictSize(int id);
+size_t roDBDictSize(int id);
 roDictIter *roDBGetIterator(int id);
 roDictIter *roDictGetIterator(dict *d, cowDictArray *ro);
 dictEntry *roDictNext(roDictIter *iter);

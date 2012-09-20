@@ -116,15 +116,14 @@ pid_t wait3(int *stat_loc, int options, void *rusage) {
 
 /* Replace MS C rtl rand which is 15bit with 32 bit */
 int replace_random() {
-#if defined(_WIN64) || defined(_MSC_VER)
     unsigned int x=0;
+    if (RtlGenRandom == NULL) {
+        HMODULE lib = LoadLibraryA("advapi32.dll");
+        RtlGenRandom = (RtlGenRandomFunc)GetProcAddress(lib, "SystemFunction036");
+        if (RtlGenRandom == NULL) return 1;
+    }
     RtlGenRandom(&x, sizeof(UINT_MAX));
     return (int)(x >> 1);
-#else
-    unsigned int x=0;
-    RtlGenRandom(&x, sizeof(UINT_MAX));
-    return (int)(x >> 1);
-#endif
 }
 
 /* BSD sockets compatibile replacement */
@@ -223,23 +222,6 @@ int pthread_detach (pthread_t thread) {
 
 pthread_t pthread_self(void) {
 	return GetCurrentThreadId();
-}
-
-int pthread_sigmask(int how, const sigset_t *set, sigset_t *oset) {
-    REDIS_NOTUSED(set);
-    REDIS_NOTUSED(oset);
-    switch (how) {
-      case SIG_BLOCK:
-      case SIG_UNBLOCK:
-      case SIG_SETMASK:
-           break;
-      default:
-            errno = EINVAL;
-            return -1;
-    }
-
-  errno = ENOSYS;
-  return -1;
 }
 
 int win32_pthread_join(pthread_t *thread, void **value_ptr)  {
@@ -512,12 +494,45 @@ double wstrtod(const char *nptr, char **eptr) {
 }
 
 int strerror_r(int err, char* buf, size_t buflen) {
-    char* strerr = strerror(err);
-    if (strlen(strerr) >= buflen) {
-        errno = ERANGE;
-        return -1;
+    int size = FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM |
+                            FORMAT_MESSAGE_IGNORE_INSERTS,
+                            NULL,
+                            err,
+                            0,
+                            buf,
+                            (DWORD)buflen,
+                            NULL);
+    if (size == 0) {
+        char* strerr = strerror(err);
+        if (strlen(strerr) >= buflen) {
+            errno = ERANGE;
+            return -1;
+        }
+        strcpy(buf, strerr);
     }
-    strcpy(buf, strerr);
+    if (size > 2 && buf[size - 2] == '\r') {
+        /* remove extra CRLF */
+        buf[size - 2] = '\0';
+    }
     return 0;
 }
+
+char wsa_strerror_buf[128];
+char *wsa_strerror(int err) {
+    int size = FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM |
+                            FORMAT_MESSAGE_IGNORE_INSERTS,
+                            NULL,
+                            err,
+                            0,
+                            wsa_strerror_buf,
+                            128,
+                            NULL);
+    if (size == 0) return strerror(err);
+    if (size > 2 && wsa_strerror_buf[size - 2] == '\r') {
+        /* remove extra CRLF */
+        wsa_strerror_buf[size - 2] = '\0';
+    }
+    return wsa_strerror_buf;
+}
+
 #endif

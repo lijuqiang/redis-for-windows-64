@@ -345,7 +345,7 @@ int d2string(char *buf, size_t len, double value) {
             len = snprintf(buf,len,"%.17g",value);
     }
 
-    return len;
+    return (int)len;
 }
 
 /* Return the UNIX time in microseconds */
