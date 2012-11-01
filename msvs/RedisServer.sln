@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RedisServer", "RedisServer.vcxproj", "{0C9DC382-C99F-7BF1-C6EF-96ED4C7CA003}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RedisServer", "RedisServer.vcxproj", "{46842776-68A5-EC98-6A09-1859BBFC73AA}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "hiredis", "hiredis\hiredis.vcxproj", "{13E85053-54B3-487B-8DDB-3430B1C1B3BF}"
 EndProject
@@ -25,10 +25,10 @@ Global
 		Release|Win32 = Release|Win32
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{0C9DC382-C99F-7BF1-C6EF-96ED4C7CA003}.Debug|Win32.ActiveCfg = Debug|Win32
-		{0C9DC382-C99F-7BF1-C6EF-96ED4C7CA003}.Debug|Win32.Build.0 = Debug|Win32
-		{0C9DC382-C99F-7BF1-C6EF-96ED4C7CA003}.Release|Win32.ActiveCfg = Release|Win32
-		{0C9DC382-C99F-7BF1-C6EF-96ED4C7CA003}.Release|Win32.Build.0 = Release|Win32
+		{46842776-68A5-EC98-6A09-1859BBFC73AA}.Debug|Win32.ActiveCfg = Debug|Win32
+		{46842776-68A5-EC98-6A09-1859BBFC73AA}.Debug|Win32.Build.0 = Debug|Win32
+		{46842776-68A5-EC98-6A09-1859BBFC73AA}.Release|Win32.ActiveCfg = Release|Win32
+		{46842776-68A5-EC98-6A09-1859BBFC73AA}.Release|Win32.Build.0 = Release|Win32
 		{13E85053-54B3-487B-8DDB-3430B1C1B3BF}.Debug|Win32.ActiveCfg = Debug|Win32
 		{13E85053-54B3-487B-8DDB-3430B1C1B3BF}.Debug|Win32.Build.0 = Debug|Win32
 		{13E85053-54B3-487B-8DDB-3430B1C1B3BF}.Release|Win32.ActiveCfg = Release|Win32
