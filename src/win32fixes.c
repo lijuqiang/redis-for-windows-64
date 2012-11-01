@@ -116,15 +116,15 @@ pid_t wait3(int *stat_loc, int options, void *rusage) {
 
 /* Replace MS C rtl rand which is 15bit with 32 bit */
 int replace_random() {
-#if defined(_WIN64) || defined(_MSC_VER)
     unsigned int x=0;
+    if (RtlGenRandom == NULL) {
+        // load proc if not loaded
+        HMODULE lib = LoadLibraryA("advapi32.dll");
+        RtlGenRandom = (RtlGenRandomFunc)GetProcAddress(lib, "SystemFunction036");
+        if (RtlGenRandom == NULL) return 1;
+    }
     RtlGenRandom(&x, sizeof(UINT_MAX));
     return (int)(x >> 1);
-#else
-    unsigned int x=0;
-    RtlGenRandom(&x, sizeof(UINT_MAX));
-    return (int)(x >> 1);
-#endif
 }
 
 /* BSD sockets compatibile replacement */
