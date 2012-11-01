@@ -48,6 +48,13 @@ void loadServerConfig(char *filename) {
         }
     }
 
+    if (fread(buf, 1, 3, fp) == 3) {
+        /* if BOM for UTF-8 skip over it, else seek to 0 */
+        if (buf[0] != (char)0xEF || buf[1] != (char)0xBB || buf[2] != (char)0xBF) {
+            fseek(fp, 0, SEEK_SET);
+        }
+    }
+
     while(fgets(buf,REDIS_CONFIGLINE_MAX+1,fp) != NULL) {
         sds *argv;
         int argc, j;
