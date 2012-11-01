@@ -34,6 +34,12 @@ msvs/RedisCli/Debug/
 msvs/RedisCli/Release/
 msvs/hiredis/Debug/
 msvs/hiredis/Release/
+msvs/x64/
+msvs/RedisBenchmark/x64/
+msvs/RedisCheckAof/x64/
+msvs/RedisCheckDump/x64/
+msvs/RedisCli/x64/
+msvs/hiredis/x64/
 msvs/ipch
 msvs/RedisServer.opensdf
 
