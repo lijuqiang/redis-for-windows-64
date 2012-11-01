@@ -288,7 +288,7 @@ int rdbSaveObject(FILE *fp, robj *o) {
 
             ar = (cowListArray *)o->ptr;
             cowUnlock();
-            if ((n = rdbSaveLen(fp,ar->numele)) == -1) return -1;
+            if ((n = rdbSaveLen(fp,(uint32_t)ar->numele)) == -1) return -1;
             nwritten += n;
 
             roListRewind(NULL, ar, &li);
@@ -337,7 +337,7 @@ int rdbSaveObject(FILE *fp, robj *o) {
 
             ar = (cowDictArray *)o->ptr;
             di = roDictGetIterator(NULL, ar);
-            if ((n = rdbSaveLen(fp,ar->numele)) == -1) return -1;
+            if ((n = rdbSaveLen(fp,(uint32_t)ar->numele)) == -1) return -1;
             nwritten += n;
 
             while((de = roDictNext(di)) != NULL) {
@@ -389,7 +389,7 @@ int rdbSaveObject(FILE *fp, robj *o) {
 
             ar = (cowDictZArray *)o->ptr;
             di = roZDictGetIterator(NULL, ar);
-            if ((n = rdbSaveLen(fp,ar->numele)) == -1) return -1;
+            if ((n = rdbSaveLen(fp,(uint32_t)ar->numele)) == -1) return -1;
             nwritten += n;
 
             while((de = roZDictNext(di)) != NULL) {
@@ -445,7 +445,7 @@ int rdbSaveObject(FILE *fp, robj *o) {
 
             ar = (cowDictArray *)o->ptr;
             di = roDictGetIterator(NULL, ar);
-            if ((n = rdbSaveLen(fp,ar->numele)) == -1) return -1;
+            if ((n = rdbSaveLen(fp,(uint32_t)ar->numele)) == -1) return -1;
             nwritten += n;
 
             while((de = roDictNext(di)) != NULL) {
