@@ -3,6 +3,7 @@
 ## What's new in this release
 
 - Now have x64 version as well as 32 bit versions.
+- For the 64 bit version, there is a limit of 2^32 objects in a structure, and a max length of 2^32 for any object
 - Version number now 2.4.11-pre1 to indicate prerelease and to enable changing
 - The code to write data over TCP has been improved. Replication under stress is now more reliable.
 - Fixes for a few reported issues.
