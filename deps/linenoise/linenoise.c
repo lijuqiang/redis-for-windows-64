@@ -409,12 +409,12 @@ static void refreshLine(int fd, const char *prompt, char *buf, size_t len, size_
     /* Erase Line */
     coord.X = 0;
     coord.Y = b.dwCursorPosition.Y;
-	FillConsoleOutputCharacterA(hOut, ' ', b.dwSize.X, coord, &w);
+    FillConsoleOutputCharacterA(hOut, ' ', b.dwSize.X, coord, &w);
     /*  Cursor to the left edge */
     SetConsoleCursorPosition(hOut, coord);
     /* Write the prompt and the current buffer content */
-    WriteConsole(hOut, prompt, plen, &pl, NULL);
-    WriteConsole(hOut, buf, len, &bl, NULL);
+    WriteConsole(hOut, prompt, (DWORD)plen, &pl, NULL);
+    WriteConsole(hOut, buf, (DWORD)len, &bl, NULL);
     /* Move cursor to original position. */
     coord.X = (int)(pos+plen);
     coord.Y = b.dwCursorPosition.Y;
@@ -514,7 +514,7 @@ static int linenoisePrompt(int fd, char *buf, size_t buflen, const char *prompt)
     linenoiseHistoryAdd("");
     
 #ifdef _WIN32
-    if (!WriteConsole(hOut, prompt, plen, &foo, NULL)) return -1;
+    if (!WriteConsole(hOut, prompt, (DWORD)plen, &foo, NULL)) return -1;
 #else
     if (write(fd,prompt,plen) == -1) return -1;
 #endif
@@ -528,7 +528,7 @@ static int linenoisePrompt(int fd, char *buf, size_t buflen, const char *prompt)
 #else
         nread = read(fd,&c,1);
 #endif
-        if (nread <= 0) return len;
+        if (nread <= 0) return (int)len;
 
         /* Only autocomplete when the callback is set. It returns < 0 when
          * there was an error reading from fd. Otherwise it will return the
@@ -536,7 +536,7 @@ static int linenoisePrompt(int fd, char *buf, size_t buflen, const char *prompt)
         if (c == 9 && completionCallback != NULL) {
             c = completeLine(fd,prompt,buf,buflen,&len,&pos,cols);
             /* Return on errors */
-            if (c < 0) return len;
+            if (c < 0) return (int)len;
             /* Read next character when 0 */
             if (c == 0) continue;
         }
@@ -705,7 +705,7 @@ up_down_arrow:
             refreshLine(fd,prompt,buf,len,pos,cols);
         }
     }
-    return len;
+    return (int)len;
 }
 
 static int linenoiseRaw(char *buf, size_t buflen, const char *prompt) {
@@ -717,8 +717,8 @@ static int linenoiseRaw(char *buf, size_t buflen, const char *prompt) {
         return -1;
     }
     if (!isatty(STDIN_FILENO)) {
-        if (fgets(buf, buflen, stdin) == NULL) return -1;
-        count = strlen(buf);
+        if (fgets(buf, (int)buflen, stdin) == NULL) return -1;
+        count = (int)strlen(buf);
         if (count && buf[count-1] == '\n') {
             count--;
             buf[count] = '\0';

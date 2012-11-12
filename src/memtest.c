@@ -72,7 +72,7 @@ void memtest_progress_step(size_t curr, size_t size, char c) {
  * address, and finally verified. This test is very fast but may detect
  * ASAP big issues with the memory subsystem. */
 void memtest_addressing(unsigned long *l, size_t bytes) {
-    unsigned long words = bytes/sizeof(unsigned long);
+    unsigned long words = (unsigned long)(bytes/sizeof(unsigned long));
     unsigned long j, *p;
 
     /* Fill */
@@ -100,8 +100,8 @@ void memtest_addressing(unsigned long *l, size_t bytes) {
  * effectiveness of caches, and making it hard for the OS to transfer
  * pages on the swap. */
 void memtest_fill_random(unsigned long *l, size_t bytes) {
-    unsigned long step = 4096/sizeof(unsigned long);
-    unsigned long words = bytes/sizeof(unsigned long)/2;
+    unsigned long step = (unsigned long)(4096/sizeof(unsigned long));
+    unsigned long words = (unsigned long)(bytes/sizeof(unsigned long)/2);
     unsigned long iwords = words/step;  /* words per iteration */
     unsigned long off, w, *l1, *l2;
 
@@ -132,8 +132,8 @@ void memtest_fill_random(unsigned long *l, size_t bytes) {
 void memtest_fill_value(unsigned long *l, size_t bytes, unsigned long v1,
                         unsigned long v2, char sym)
 {
-    unsigned long step = 4096/sizeof(unsigned long);
-    unsigned long words = bytes/sizeof(unsigned long)/2;
+    unsigned long step = (unsigned long)(4096/sizeof(unsigned long));
+    unsigned long words = (unsigned long)(bytes/sizeof(unsigned long)/2);
     unsigned long iwords = words/step;  /* words per iteration */
     unsigned long off, w, *l1, *l2, v;
 
@@ -161,7 +161,7 @@ void memtest_fill_value(unsigned long *l, size_t bytes, unsigned long v1,
 }
 
 void memtest_compare(unsigned long *l, size_t bytes) {
-    unsigned long words = bytes/sizeof(unsigned long)/2;
+    unsigned long words = (unsigned long)(bytes/sizeof(unsigned long)/2);
     unsigned long w, *l1, *l2;
 
     assert((bytes & 4095) == 0);

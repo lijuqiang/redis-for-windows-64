@@ -52,7 +52,7 @@ int readLong(FILE *fp, char prefix, long *target) {
 int readBytes(FILE *fp, char *target, long length) {
     long real;
     epos = ftello(fp);
-    real = fread(target,1,length,fp);
+    real = (long)fread(target,1,length,fp);
     if (real != length) {
         ERROR("Expected to read %ld bytes, got %ld bytes",length,real);
         return 0;

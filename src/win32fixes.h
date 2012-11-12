@@ -174,11 +174,6 @@ int getrusage(int who, struct rusage * rusage);
 #define SA_ONESHOT      SA_RESETHAND
 #define SA_RESTORER     0x04000000
 
-#ifndef _SIGSET_T_
-#define _SIGSET_T_
-typedef unsigned long _sigset_t;
-typedef unsigned long sigset_t;
-#endif /* _SIGSET_T_ */
 
 #define sigemptyset(pset)    (*(pset) = 0)
 #define sigfillset(pset)     (*(pset) = (unsigned int)-1)
@@ -194,6 +189,16 @@ typedef unsigned long sigset_t;
 
 typedef	void (*__p_sig_fn_t)(int);
 typedef int pid_t;
+
+#ifndef _SIGSET_T_
+#define _SIGSET_T_
+#ifdef _WIN64
+typedef unsigned long long _sigset_t;
+#else
+typedef unsigned long _sigset_t;
+#endif
+typedef unsigned long sigset_t;
+#endif /* _SIGSET_T_ */
 
 struct sigaction {
     int          sa_flags;
@@ -263,7 +268,6 @@ int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
 int pthread_cond_signal(pthread_cond_t *cond);
 
 int pthread_detach (pthread_t thread);
-int pthread_sigmask(int how, const sigset_t *set, sigset_t *oset);
 
 /* Misc Unix -> Win32 */
 int kill(pid_t pid, int sig);
@@ -309,6 +313,7 @@ int aeWinListen(SOCKET sock, int backlog);
 int aeWinAccept(int fd, struct sockaddr *sa, socklen_t *len);
 
 int strerror_r(int err, char* buf, size_t buflen);
+char *wsa_strerror(int err);
 
 #endif /* WIN32 */
 #endif /* WIN32FIXES_H */

@@ -53,7 +53,7 @@ int aeWinQueueAccept(SOCKET listensock) {
     SOCKET acceptsock;
     aacceptreq * areq;
 
-    if ((sockstate = aeGetSockState(iocpState, listensock)) == NULL) {
+    if ((sockstate = aeGetSockState(iocpState, (int)listensock)) == NULL) {
         errno = WSAEINVAL;
         return -1;
     }
@@ -64,7 +64,7 @@ int aeWinQueueAccept(SOCKET listensock) {
         return -1;
     }
 
-    accsockstate = aeGetSockState(iocpState, acceptsock);
+    accsockstate = aeGetSockState(iocpState, (int)acceptsock);
     if (accsockstate == NULL) {
         errno = WSAEINVAL;
         return -1;
@@ -104,12 +104,12 @@ int aeWinListen(SOCKET sock, int backlog) {
     const GUID wsaid_acceptexaddrs = WSAID_GETACCEPTEXSOCKADDRS;
     DWORD result, bytes;
 
-    if ((sockstate = aeGetSockState(iocpState, sock)) == NULL) {
+    if ((sockstate = aeGetSockState(iocpState, (int)sock)) == NULL) {
         errno = WSAEINVAL;
         return SOCKET_ERROR;
     }
 
-    aeWinSocketAttach(sock);
+    aeWinSocketAttach((int)sock);
     sockstate->masks |= LISTEN_SOCK;
 
     result = WSAIoctl(sock,
@@ -159,6 +159,7 @@ int aeWinAccept(int fd, struct sockaddr *sa, socklen_t *len) {
     SOCKADDR *premotesa;
     int locallen, remotelen;
     aacceptreq * areq;
+    SOCKET listenSock = (SOCKET)fd;
 
     if ((sockstate = aeGetSockState(iocpState, fd)) == NULL) {
         errno = WSAEINVAL;
@@ -174,13 +175,13 @@ int aeWinAccept(int fd, struct sockaddr *sa, socklen_t *len) {
 
     sockstate->reqs = areq->next;
 
-    acceptsock = areq->accept;
+    acceptsock = (int)areq->accept;
 
     result = setsockopt(acceptsock,
                         SOL_SOCKET,
                         SO_UPDATE_ACCEPT_CONTEXT,
-                        (char*)&fd,
-                        sizeof(fd));
+                        (char*)&listenSock,
+                        sizeof(listenSock));
     if (result == SOCKET_ERROR) {
         errno = WSAGetLastError();
         return SOCKET_ERROR;
@@ -204,7 +205,7 @@ int aeWinAccept(int fd, struct sockaddr *sa, socklen_t *len) {
     zfree(areq);
 
     /* queue another accept */
-    if (aeWinQueueAccept(fd) == -1) {
+    if (aeWinQueueAccept(listenSock) == -1) {
         return SOCKET_ERROR;
     }
 

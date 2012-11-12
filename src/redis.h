@@ -313,10 +313,6 @@ typedef struct redisClient {
     list *reply;
     unsigned long reply_bytes; /* Tot bytes of objects in reply list */
     int sentlen;
-#ifdef _WIN32
-    int sentobjlen;
-    robj *sentobj;          /* keep track of last sent reply object */
-#endif
     time_t lastinteraction; /* time of the last interaction, used for timeout */
     int flags;              /* REDIS_SLAVE | REDIS_MONITOR | REDIS_MULTI ... */
     int slaveseldb;         /* slave selected db, if this client is a slave */

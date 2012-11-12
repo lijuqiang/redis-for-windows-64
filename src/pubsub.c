@@ -203,9 +203,9 @@ int pubsubPublishMessage(robj *channel, robj *message) {
             pubsubPattern *pat = ln->value;
 
             if (stringmatchlen((char*)pat->pattern->ptr,
-                                sdslen(pat->pattern->ptr),
+                                (int)sdslen(pat->pattern->ptr),
                                 (char*)channel->ptr,
-                                sdslen(channel->ptr),0)) {
+                                (int)sdslen(channel->ptr),0)) {
                 addReply(pat->client,shared.mbulk4);
                 addReply(pat->client,shared.pmessagebulk);
                 addReplyBulk(pat->client,pat->pattern);

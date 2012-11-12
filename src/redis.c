@@ -281,8 +281,8 @@ int dictSdsKeyCompare(void *privdata, const void *key1,
     int l1,l2;
     DICT_NOTUSED(privdata);
 
-    l1 = sdslen((sds)key1);
-    l2 = sdslen((sds)key2);
+    l1 = (int)sdslen((sds)key1);
+    l2 = (int)sdslen((sds)key2);
     if (l1 != l2) return 0;
     return memcmp(key1, key2, l1) == 0;
 }
@@ -320,15 +320,15 @@ int dictObjKeyCompare(void *privdata, const void *key1,
 
 unsigned int dictObjHash(const void *key) {
     const robj *o = key;
-    return dictGenHashFunction(o->ptr, sdslen((sds)o->ptr));
+    return dictGenHashFunction(o->ptr, (int)sdslen((sds)o->ptr));
 }
 
 unsigned int dictSdsHash(const void *key) {
-    return dictGenHashFunction((unsigned char*)key, sdslen((char*)key));
+    return dictGenHashFunction((unsigned char*)key, (int)sdslen((char*)key));
 }
 
 unsigned int dictSdsCaseHash(const void *key) {
-    return dictGenCaseHashFunction((unsigned char*)key, sdslen((char*)key));
+    return dictGenCaseHashFunction((unsigned char*)key, (int)sdslen((char*)key));
 }
 
 int dictEncObjKeyCompare(void *privdata, const void *key1,
@@ -353,7 +353,7 @@ unsigned int dictEncObjHash(const void *key) {
     robj *o = (robj*) key;
 
     if (o->encoding == REDIS_ENCODING_RAW) {
-        return dictGenHashFunction(o->ptr, sdslen((sds)o->ptr));
+        return dictGenHashFunction(o->ptr, (int)sdslen((sds)o->ptr));
     } else {
         if (o->encoding == REDIS_ENCODING_INT) {
             char buf[32];
@@ -365,7 +365,7 @@ unsigned int dictEncObjHash(const void *key) {
             unsigned int hash;
 
             o = getDecodedObject(o);
-            hash = dictGenHashFunction(o->ptr, sdslen((sds)o->ptr));
+            hash = dictGenHashFunction(o->ptr, (int)sdslen((sds)o->ptr));
             decrRefCount(o);
             return hash;
         }
@@ -510,7 +510,7 @@ void activeExpireCycle(void) {
         /* Continue to expire if at the end of the cycle more than 25%
          * of the keys were expired. */
         do {
-            long num = dictSize(db->expires);
+            size_t num = dictSize(db->expires);
             time_t now = time(NULL);
 
             expired = 0;
@@ -796,7 +796,7 @@ void createSharedObjects(void) {
 #pragma warning(disable: 4723)
 #endif
 void initServerConfig() {
-    server.arch_bits = (sizeof(long) == 8) ? 64 : 32;
+    server.arch_bits = (sizeof(void*) == 8) ? 64 : 32;
     server.port = REDIS_SERVERPORT;
     server.bindaddr = NULL;
     server.unixsocket = NULL;
