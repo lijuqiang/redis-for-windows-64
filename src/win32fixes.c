@@ -225,23 +225,6 @@ pthread_t pthread_self(void) {
 	return GetCurrentThreadId();
 }
 
-int pthread_sigmask(int how, const sigset_t *set, sigset_t *oset) {
-    REDIS_NOTUSED(set);
-    REDIS_NOTUSED(oset);
-    switch (how) {
-      case SIG_BLOCK:
-      case SIG_UNBLOCK:
-      case SIG_SETMASK:
-           break;
-      default:
-            errno = EINVAL;
-            return -1;
-    }
-
-  errno = ENOSYS;
-  return -1;
-}
-
 int win32_pthread_join(pthread_t *thread, void **value_ptr)  {
     int result;
     HANDLE h = OpenThread(SYNCHRONIZE, FALSE, *thread);
@@ -512,12 +495,45 @@ double wstrtod(const char *nptr, char **eptr) {
 }
 
 int strerror_r(int err, char* buf, size_t buflen) {
-    char* strerr = strerror(err);
-    if (strlen(strerr) >= buflen) {
-        errno = ERANGE;
-        return -1;
+    int size = FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM |
+                            FORMAT_MESSAGE_IGNORE_INSERTS,
+                            NULL,
+                            err,
+                            0,
+                            buf,
+                            (DWORD)buflen,
+                            NULL);
+    if (size == 0) {
+        char* strerr = strerror(err);
+        if (strlen(strerr) >= buflen) {
+            errno = ERANGE;
+            return -1;
+        }
+        strcpy(buf, strerr);
     }
-    strcpy(buf, strerr);
+    if (size > 2 && buf[size - 2] == '\r') {
+        /* remove extra CRLF */
+        buf[size - 2] = '\0';
+    }
     return 0;
 }
+
+char wsa_strerror_buf[128];
+char *wsa_strerror(int err) {
+    int size = FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM |
+                            FORMAT_MESSAGE_IGNORE_INSERTS,
+                            NULL,
+                            err,
+                            0,
+                            wsa_strerror_buf,
+                            128,
+                            NULL);
+    if (size == 0) return strerror(err);
+    if (size > 2 && wsa_strerror_buf[size - 2] == '\r') {
+        /* remove extra CRLF */
+        wsa_strerror_buf[size - 2] = '\0';
+    }
+    return wsa_strerror_buf;
+}
+
 #endif

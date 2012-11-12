@@ -96,9 +96,9 @@ static int redisCreateSocket(redisContext *c, int type) {
         LINGER l;
         l.l_onoff = 1;
         l.l_linger = 2;
-        setsockopt(s, SOL_SOCKET, SO_LINGER, (const char *) &l, sizeof(l));
+        setsockopt((int)s, SOL_SOCKET, SO_LINGER, (const char *) &l, sizeof(l));
 
-        if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (const char *) &on, sizeof(on)) == -1) {
+        if (setsockopt((int)s, SOL_SOCKET, SO_REUSEADDR, (const char *) &on, sizeof(on)) == -1) {
             __redisSetError(c,REDIS_ERR_IO,NULL);
             closesocket(s);
             return REDIS_ERR;

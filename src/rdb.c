@@ -17,7 +17,7 @@
  * instead of writing to /dev/null. */
 static int rdbWriteRaw(FILE *fp, void *p, size_t len) {
     if (fp != NULL && fwrite(p,len,1,fp) == 0) return -1;
-    return len;
+    return (int)len;
 }
 
 int rdbSaveType(FILE *fp, unsigned char type) {
@@ -113,7 +113,7 @@ int rdbSaveLzfStringObject(FILE *fp, unsigned char *s, size_t len) {
     if (len <= 4) return 0;
     outlen = len-4;
     if ((out = zmalloc(outlen+1)) == NULL) return 0;
-    comprlen = lzf_compress(s, len, out, outlen);
+    comprlen = lzf_compress(s, (unsigned int)len, out, (unsigned int)outlen);
     if (comprlen == 0) {
         zfree(out);
         return 0;
@@ -123,10 +123,10 @@ int rdbSaveLzfStringObject(FILE *fp, unsigned char *s, size_t len) {
     if ((n = rdbWriteRaw(fp,&byte,1)) == -1) goto writeerr;
     nwritten += n;
 
-    if ((n = rdbSaveLen(fp,comprlen)) == -1) goto writeerr;
+    if ((n = rdbSaveLen(fp,(uint32_t)comprlen)) == -1) goto writeerr;
     nwritten += n;
 
-    if ((n = rdbSaveLen(fp,len)) == -1) goto writeerr;
+    if ((n = rdbSaveLen(fp,(uint32_t)len)) == -1) goto writeerr;
     nwritten += n;
 
     if ((n = rdbWriteRaw(fp,out,comprlen)) == -1) goto writeerr;
@@ -165,11 +165,11 @@ int rdbSaveRawString(FILE *fp, unsigned char *s, size_t len) {
     }
 
     /* Store verbatim */
-    if ((n = rdbSaveLen(fp,len)) == -1) return -1;
+    if ((n = rdbSaveLen(fp,(uint32_t)len)) == -1) return -1;
     nwritten += n;
     if (len > 0) {
         if (rdbWriteRaw(fp,s,len) == -1) return -1;
-        nwritten += len;
+        nwritten += (int)len;
     }
     return nwritten;
 }
@@ -288,7 +288,7 @@ int rdbSaveObject(FILE *fp, robj *o) {
 
             ar = (cowListArray *)o->ptr;
             cowUnlock();
-            if ((n = rdbSaveLen(fp,ar->numele)) == -1) return -1;
+            if ((n = rdbSaveLen(fp,(uint32_t)ar->numele)) == -1) return -1;
             nwritten += n;
 
             roListRewind(NULL, ar, &li);
@@ -309,7 +309,7 @@ int rdbSaveObject(FILE *fp, robj *o) {
             dict *set = o->ptr;
             roDictIter *di;
             dictEntry *de;
-            int32_t len = dictSize(set);
+            int32_t len = (int32_t)dictSize(set);
             di = roDictGetIterator(set, NULL);
             cowUnlock();
 
@@ -337,7 +337,7 @@ int rdbSaveObject(FILE *fp, robj *o) {
 
             ar = (cowDictArray *)o->ptr;
             di = roDictGetIterator(NULL, ar);
-            if ((n = rdbSaveLen(fp,ar->numele)) == -1) return -1;
+            if ((n = rdbSaveLen(fp,(uint32_t)ar->numele)) == -1) return -1;
             nwritten += n;
 
             while((de = roDictNext(di)) != NULL) {
@@ -364,7 +364,7 @@ int rdbSaveObject(FILE *fp, robj *o) {
             zset *zs = o->ptr;
             roZDictIter *di = roZDictGetIterator(zs->dict, NULL);
             dictEntry *de;
-            uint32_t len = dictSize(zs->dict);
+            uint32_t len = (int32_t)dictSize(zs->dict);
             cowUnlock();
 
             if ((n = rdbSaveLen(fp,len)) == -1) return -1;
@@ -389,7 +389,7 @@ int rdbSaveObject(FILE *fp, robj *o) {
 
             ar = (cowDictZArray *)o->ptr;
             di = roZDictGetIterator(NULL, ar);
-            if ((n = rdbSaveLen(fp,ar->numele)) == -1) return -1;
+            if ((n = rdbSaveLen(fp,(uint32_t)ar->numele)) == -1) return -1;
             nwritten += n;
 
             while((de = roZDictNext(di)) != NULL) {
@@ -419,7 +419,7 @@ int rdbSaveObject(FILE *fp, robj *o) {
         } else if (o->encoding == REDIS_ENCODING_HT) {
             roDictIter *di;
             dictEntry *de;
-            uint32_t len = dictSize((dict*)o->ptr);
+            uint32_t len = (int32_t)dictSize((dict*)o->ptr);
             di = roDictGetIterator(o->ptr, NULL);
             cowUnlock();
 
@@ -445,7 +445,7 @@ int rdbSaveObject(FILE *fp, robj *o) {
 
             ar = (cowDictArray *)o->ptr;
             di = roDictGetIterator(NULL, ar);
-            if ((n = rdbSaveLen(fp,ar->numele)) == -1) return -1;
+            if ((n = rdbSaveLen(fp,(uint32_t)ar->numele)) == -1) return -1;
             nwritten += n;
 
             while((de = roDictNext(di)) != NULL) {
@@ -846,7 +846,7 @@ robj *rdbLoadObject(int type, FILE *fp) {
 
             if (o->encoding == REDIS_ENCODING_ZIPLIST) {
                 dec = getDecodedObject(ele);
-                o->ptr = ziplistPush(o->ptr,dec->ptr,sdslen(dec->ptr),REDIS_TAIL);
+                o->ptr = ziplistPush(o->ptr,dec->ptr,(unsigned int)sdslen(dec->ptr),REDIS_TAIL);
                 decrRefCount(dec);
                 decrRefCount(ele);
             } else {
@@ -960,8 +960,8 @@ robj *rdbLoadObject(int type, FILE *fp) {
                 /* We need raw string objects to add them to the zipmap */
                 deckey = getDecodedObject(key);
                 decval = getDecodedObject(val);
-                zm = zipmapSet(zm,deckey->ptr,sdslen(deckey->ptr),
-                                  decval->ptr,sdslen(decval->ptr),NULL);
+                zm = zipmapSet(zm,deckey->ptr,(unsigned int)sdslen(deckey->ptr),
+                                  decval->ptr,(unsigned int)sdslen(decval->ptr),NULL);
                 o->ptr = zm;
                 decrRefCount(deckey);
                 decrRefCount(decval);

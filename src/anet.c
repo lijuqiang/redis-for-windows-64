@@ -173,7 +173,7 @@ static int anetCreateSocket(char *err, int domain) {
 
     /* Make sure connection-intensive things like the redis benckmark
      * will be able to close/open sockets a zillion of times */
-    if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == SOCKET_ERROR) {
+    if (setsockopt((int)s, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == SOCKET_ERROR) {
         errno = WSAGetLastError();
         anetSetError(err, "setsockopt SO_REUSEADDR: %d\n", errno);
         return ANET_ERR;

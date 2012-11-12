@@ -118,7 +118,7 @@ typedef struct {
 static unsigned char level = 0;
 static pos positions[16];
 
-#define CURR_OFFSET (positions[level].offset)
+#define CURR_OFFSET ((uint32_t)(positions[level].offset))
 
 /* Hold a stack of errors */
 typedef struct {

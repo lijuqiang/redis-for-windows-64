@@ -386,7 +386,7 @@ static sds cliFormatReplyTTY(redisReply *r, char *prefix) {
             sds tmp;
 
             /* Calculate chars needed to represent the largest index */
-            i = r->elements;
+            i = (unsigned int)r->elements;
             do {
                 idxlen++;
                 i /= 10;
@@ -864,7 +864,7 @@ static void slaveMode(void) {
      * The hiredis client lib does not understand this part of the protocol
      * and we don't want to mess with its buffers, so everything is performed
      * using direct low-level I/O. */
-    int fd = context->fd;
+    int fd = (int)context->fd;
     char buf[1024], *p;
     ssize_t nread;
     unsigned long long payload;
