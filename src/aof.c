@@ -128,7 +128,7 @@ void flushAppendOnlyFile(int force) {
      * While this will save us against the server being killed I don't think
      * there is much to do about the whole server stopping for power problems
      * or alike */
-    nwritten = write(server.appendfd,server.aofbuf,sdslen(server.aofbuf));
+    nwritten = write(server.appendfd,server.aofbuf,(unsigned int)sdslen(server.aofbuf));
     if (nwritten != (signed)sdslen(server.aofbuf)) {
         /* Ooops, we are in troubles. The best thing to do for now is
          * aborting instead of giving the illusion that everything is
@@ -809,7 +809,7 @@ void backgroundRewriteDoneHandler(int statloc) {
             goto cleanup;
         }
 
-        nwritten = write(newfd,server.bgrewritebuf,sdslen(server.bgrewritebuf));
+        nwritten = write(newfd,server.bgrewritebuf,(unsigned int)sdslen(server.bgrewritebuf));
         if (nwritten != (signed)sdslen(server.bgrewritebuf)) {
             if (nwritten == -1) {
                 redisLog(REDIS_WARNING,

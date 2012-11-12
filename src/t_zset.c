@@ -590,7 +590,7 @@ unsigned char *zzlFind(unsigned char *zl, robj *ele, double *score) {
         sptr = ziplistNext(zl,eptr);
         redisAssert(sptr != NULL);
 
-        if (ziplistCompare(eptr,ele->ptr,sdslen(ele->ptr))) {
+        if (ziplistCompare(eptr,ele->ptr,(unsigned int)sdslen(ele->ptr))) {
             /* Matching element, pull out score. */
             if (score != NULL) *score = zzlGetScore(sptr);
             decrRefCount(ele);
@@ -625,12 +625,12 @@ unsigned char *zzlInsertAt(unsigned char *zl, unsigned char *eptr, robj *ele, do
     redisAssert(ele->encoding == REDIS_ENCODING_RAW);
     scorelen = d2string(scorebuf,sizeof(scorebuf),score);
     if (eptr == NULL) {
-        zl = ziplistPush(zl,ele->ptr,sdslen(ele->ptr),ZIPLIST_TAIL);
+        zl = ziplistPush(zl,ele->ptr,(unsigned int)sdslen(ele->ptr),ZIPLIST_TAIL);
         zl = ziplistPush(zl,(unsigned char*)scorebuf,scorelen,ZIPLIST_TAIL);
     } else {
         /* Keep offset relative to zl, as it might be re-allocated. */
         offset = eptr-zl;
-        zl = ziplistInsert(zl,eptr,ele->ptr,sdslen(ele->ptr));
+        zl = ziplistInsert(zl,eptr,ele->ptr,(unsigned int)sdslen(ele->ptr));
         eptr = zl+offset;
 
         /* Insert score after the element. */
@@ -661,7 +661,7 @@ unsigned char *zzlInsert(unsigned char *zl, robj *ele, double score) {
             break;
         } else if (s == score) {
             /* Ensure lexicographical ordering for elements. */
-            if (zzlCompareElements(eptr,ele->ptr,sdslen(ele->ptr)) > 0) {
+            if (zzlCompareElements(eptr,ele->ptr,(unsigned int)sdslen(ele->ptr)) > 0) {
                 zl = zzlInsertAt(zl,eptr,ele,score);
                 break;
             }
@@ -1231,7 +1231,7 @@ int zuiLength(zsetopsrc *op) {
         if (op->encoding == REDIS_ENCODING_INTSET) {
             return intsetLen(it->is.is);
         } else if (op->encoding == REDIS_ENCODING_HT) {
-            return dictSize(it->ht.dict);
+            return (int)dictSize(it->ht.dict);
         } else {
             redisPanic("Unknown set encoding");
         }
@@ -1353,7 +1353,7 @@ int zuiBufferFromValue(zsetopval *val) {
                 val->elen = ll2string((char*)val->_buf,sizeof(val->_buf),(long)val->ele->ptr);
                 val->estr = val->_buf;
             } else if (val->ele->encoding == REDIS_ENCODING_RAW) {
-                val->elen = sdslen(val->ele->ptr);
+                val->elen = (unsigned int)sdslen(val->ele->ptr);
                 val->estr = val->ele->ptr;
             } else {
                 redisPanic("Unsupported element encoding");
@@ -1577,7 +1577,7 @@ void zunionInterGenericCommand(redisClient *c, robj *dstkey, int op) {
 
                     if (tmp->encoding == REDIS_ENCODING_RAW)
                         if (sdslen(tmp->ptr) > maxelelen)
-                            maxelelen = sdslen(tmp->ptr);
+                            maxelelen = (unsigned int)sdslen(tmp->ptr);
                 }
             }
         }
@@ -1619,7 +1619,7 @@ void zunionInterGenericCommand(redisClient *c, robj *dstkey, int op) {
 
                 if (tmp->encoding == REDIS_ENCODING_RAW)
                     if (sdslen(tmp->ptr) > maxelelen)
-                        maxelelen = sdslen(tmp->ptr);
+                        maxelelen = (unsigned int)sdslen(tmp->ptr);
             }
         }
     } else {
@@ -2022,7 +2022,7 @@ void zrankGenericCommand(redisClient *c, int reverse) {
 
         rank = 1;
         while(eptr != NULL) {
-            if (ziplistCompare(eptr,ele->ptr,sdslen(ele->ptr)))
+            if (ziplistCompare(eptr,ele->ptr,(unsigned int)sdslen(ele->ptr)))
                 break;
             rank++;
             zzlNext(zl,&eptr,&sptr);

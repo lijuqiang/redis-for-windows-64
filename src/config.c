@@ -442,7 +442,7 @@ void configSetCommand(redisClient *c) {
         server.auto_aofrewrite_min_size = (off_t)ll;
     } else if (!strcasecmp(c->argv[2]->ptr,"save")) {
         int vlen, j;
-        sds *v = sdssplitlen(o->ptr,sdslen(o->ptr)," ",1,&vlen);
+        sds *v = sdssplitlen(o->ptr,(int)sdslen(o->ptr)," ",1,&vlen);
 
         /* Perform sanity check before setting the new config:
          * - Even number of args

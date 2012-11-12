@@ -1,7 +1,14 @@
-Redis on Windows prototype
+﻿Redis on Windows prototype
 ===
 ## What's new in this release
 
+- Now have x64 version as well as 32 bit versions.
+- For the 64 bit version, there is a limit of 2^32 objects in a structure, and a max length of 2^32 for any object
+- Version number now 2.4.11-pre1 to indicate prerelease and to enable changing
+- The code to write data over TCP has been improved. Replication under stress is now more reliable.
+- Fixes for a few reported issues.
+
+From previous releases
 - Based on Redis 2.4.11
 - Removed dependency on the pthreads library
 - Improved the snapshotting (save on disk) algorithm. Implemented Copy-On-Write at the application level so snapshotting behavior is similar to the Linux version.
@@ -12,7 +19,7 @@ Special thanks to Dušan Majkic (https://github.com/dmajkic, https://github.com/
 ## Repo branches
 - 2.4: save in foreground
 - bksave: background save where we write the data to buffers first, then save to disk on a background thread. It is much faster than saving directly to disk, but it uses more memory. 
-- bksavecow: Copy On Write at the application level
+- bksavecow: Copy On Write at the application level. Has lower latency than bksave.
 
 ## How to build Redis using Visual Studio
 
@@ -22,7 +29,7 @@ You can use the free Express Edition available at http://www.microsoft.com/visua
 <pre><code>git checkout bksavecow</code></pre>
     
 
-- Open the solution file msvs\redisserver.sln in Visual Studio 10, and build.
+- Open the solution file msvs\redisserver.sln in Visual Studio 10, select platform (win32 or x64) and build.
 
     This should create the following executables in the msvs\$(Configuration) folder:
 
@@ -47,7 +54,6 @@ To run the test suite requires some manual work:
 
 - Improve test coverage
 - Fix some performance issues on the Copy On Write code
-- Add 64bit support
 
 
  

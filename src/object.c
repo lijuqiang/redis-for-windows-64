@@ -40,7 +40,7 @@ robj *createStringObjectFromLongLong(long long value) {
         if (value >= LONG_MIN && value <= LONG_MAX) {
             o = createObject(REDIS_STRING, NULL);
             o->encoding = REDIS_ENCODING_INT;
-            o->ptr = (void*)((long)value);
+            o->ptr = (void*)(value);
         } else {
             o = createObject(REDIS_STRING,sdsfromlonglong(value));
         }
@@ -207,7 +207,7 @@ int checkType(redisClient *c, robj *o, int type) {
 int isObjectRepresentableAsLongLong(robj *o, long long *llval) {
     redisAssert(o->type == REDIS_STRING);
     if (o->encoding == REDIS_ENCODING_INT) {
-        if (llval) *llval = (long) o->ptr;
+        if (llval) *llval = (long long) o->ptr;
         return REDIS_OK;
     } else {
         return string2ll(o->ptr,sdslen(o->ptr),llval) ? REDIS_OK : REDIS_ERR;

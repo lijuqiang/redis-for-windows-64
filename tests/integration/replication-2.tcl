@@ -8,7 +8,12 @@ start_server {tags {"repl"}} {
 
         test {MASTER and SLAVE dataset should be identical after complex ops} {
             createComplexDataset r 10000
-            after 500
+            # Make sure that slave and master have same number of keys
+            wait_for_condition 500 100 {
+                [r dbsize] == [r -1 dbsize]
+            } else {
+                fail "Different number of keys between master and slave after too much time."
+            }
             if {[r debug digest] ne [r -1 debug digest]} {
                 set csv1 [csvdump r]
                 set csv2 [csvdump {r -1}]

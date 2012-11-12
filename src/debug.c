@@ -19,7 +19,7 @@ void xorDigest(unsigned char *digest, void *ptr, size_t len) {
     int j;
 
     SHA1Init(&ctx);
-    SHA1Update(&ctx,s,len);
+    SHA1Update(&ctx,s,(u_int32_t)len);
     SHA1Final(hash,&ctx);
 
     for (j = 0; j < 20; j++)
