@@ -33,14 +33,14 @@ Now *bksavecow* is the default branch.
 
 For your convinience all binaries and the MSI for the Redis-Watcher service will be available in the msvs/bin/release|debug directories.
 
-### RedisWatcher
+## RedisWatcher
 With this release we added a Windows Service that can be used to start and monitor one or more Redis instances, the service 
 monitors the processes and restart them if they stop. 
 
 You can find the project to build the service under the msvs\RedisWatcher directory. In the readme on the same location
 you will find the instructions on how to build and use the service.
 
-### Release Notes
+## Release Notes
 
 This is a pre-release version of the software and is not yet fully tested. This is intended to be a 32bit release only. 
 No work has been done in order to produce a 64bit version of Redis on Windows.
@@ -52,7 +52,7 @@ To run the test suite requires some manual work:
   
 If a Unix shell is not installed you may see the following error message: "couldn't execute "cat": no such file or directory".
 
-### Plan for the next release
+## Plan for the next release
 
 - Improve test coverage
 - Fix some performance issues on the Copy On Write code
