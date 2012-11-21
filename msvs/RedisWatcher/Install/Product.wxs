@@ -6,7 +6,10 @@
 
         <Media Id="1" Cabinet="media1.cab" EmbedCab="yes" />
 
-        <Directory Id="TARGETDIR" Name="SourceDir">
+      <PropertyRef Id="WIX_ACCOUNT_USERS" />
+      <PropertyRef Id="WIX_ACCOUNT_ADMINISTRATORS"/>
+
+      <Directory Id="TARGETDIR" Name="SourceDir">
             <Directory Id="ProgramFilesFolder">
                 <Directory Id="INSTALLLOCATION" Name="RedisWatcher">
                     <Component Id="ProductComponent" Guid="1b743227-f33f-426c-a0ea-20bd159b21d6">
@@ -16,8 +19,8 @@
                         <util:EventManifest MessageFile="[INSTALLLOCATION]RedisWatcher.exe" ResourceFile="[INSTALLLOCATION]RedisWatcher.exe"/>
                       </File>
                       <File Id="watcher.conf" Name="watcher.conf" Source="$(var.RedisWatcher.ProjectDir)" DiskId="1" >
-                        <Permission GenericAll="yes" User=".\Users" />
-                        <Permission GenericAll="yes" User=".\Administrators" />
+                        <Permission GenericAll="yes" User="[WIX_ACCOUNT_USERS]" />
+                        <Permission  GenericAll="yes" User="[WIX_ACCOUNT_ADMINISTRATORS]" />
                       </File>
                       <ServiceInstall Id="RedisWatcherSvc" Name="RedisWatcherSvc" DisplayName ="Redis watcher" ErrorControl="normal"
                                       Start="auto" Type="ownProcess" Description="Redis process starter and watchdog">
