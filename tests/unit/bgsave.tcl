@@ -2285,4 +2285,23 @@ start_server {tags {"other"}} {
         assert_equal $e1 1
         r flushdb
     } {OK}
+
+    test {BGSAVE expires stress} {
+        waitForBgsave r
+        r flushdb
+        r save
+        set iter1 400
+        set step1 1
+        for {set rpt 0} {$rpt < 50} {incr rpt $step1} {
+            for {set i 0} {$i < $iter1} {incr i $step1} {
+                set exp [randomInt 4]
+                incr exp
+                r setex [randomKey] $exp $i
+            }
+            catch { r bgsave } err
+            after 200
+        }
+        r flushdb
+    } {OK}
+
 }

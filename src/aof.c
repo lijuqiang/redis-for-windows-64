@@ -422,6 +422,7 @@ int rewriteAppendOnlyFile(char *filename) {
     char tmpfile[256];
     int j;
     time_t now = time(NULL);
+    dictIterator * expIter = NULL;
 
     /* Note that we have to use a different temp name here compared to the
      * one used by rewriteAppendOnlyFileBackground() function. */
@@ -452,6 +453,8 @@ int rewriteAppendOnlyFile(char *filename) {
             continue;
         }
         di = roDBGetIterator(j);
+        /* to prevent rehash of expires from background thread, get safe iterator */
+        expIter = dictGetSafeIterator(db->expires);
         cowUnlock();
 #else
         d = db->dict;
@@ -476,7 +479,11 @@ int rewriteAppendOnlyFile(char *filename) {
             keystr = dictGetEntryKey(de);
             o = dictGetEntryVal(de);
             initStaticStringObject(key,keystr);
+#ifdef _WIN32
+            expiretime = getExpireForSave(db,&key);
+#else
             expiretime = getExpire(db,&key);
+#endif
 
             cowLock();
 #ifdef _WIN32
@@ -745,6 +752,9 @@ int rewriteAppendOnlyFile(char *filename) {
                 if (fwriteBulkLongLong(fp,expiretime) == 0) goto werr;
             }
         }
+#ifdef _WIN32
+        if (expIter) dictReleaseIterator(expIter);
+#endif
         roDictReleaseIterator(di);
     }
 
@@ -767,6 +777,9 @@ werr:
     fclose(fp);
     unlink(tmpfile);
     redisLog(REDIS_WARNING,"Write error writing append only file on disk: %s", strerror(errno));
+#ifdef _WIN32
+    if (expIter) dictReleaseIterator(expIter);
+#endif
     if (di) roDictReleaseIterator(di);
     return REDIS_ERR;
 }

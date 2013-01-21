@@ -832,6 +832,9 @@ int removeExpire(redisDb *db, robj *key);
 void propagateExpire(redisDb *db, robj *key);
 int expireIfNeeded(redisDb *db, robj *key);
 time_t getExpire(redisDb *db, robj *key);
+#ifdef _WIN32
+time_t getExpireForSave(redisDb *db, robj *key);
+#endif
 void setExpire(redisDb *db, robj *key, time_t when);
 robj *lookupKey(redisDb *db, robj *key);
 robj *lookupKeyRead(redisDb *db, robj *key);

@@ -134,6 +134,7 @@ int dbDelete(redisDb *db, robj *key) {
     /* If copy on write, may need to copy dict before delete */
     if (server.isBackgroundSaving) {
         cowEnsureWriteCopy(db, key, NULL);
+        if (dictSize(db->expires) > 0) cowEnsureExpiresCopy(db);
     }
 #endif
     /* Deleting an entry from the expires dict will not free the sds of
@@ -152,6 +153,7 @@ long long emptyDb() {
         /* If copy on write, may need to copy dict before delete */
         if (server.isBackgroundSaving) {
             cowEnsureWriteCopy(&server.db[j], NULL, NULL);
+            cowEnsureExpiresCopy(&server.db[j]);
         }
 #endif
         removed += dictSize(server.db[j].dict);
@@ -194,6 +196,7 @@ void flushdbCommand(redisClient *c) {
     /* If copy on write, may need to copy dict before delete */
     if (server.isBackgroundSaving) {
         cowEnsureWriteCopy(c->db, NULL, NULL);
+        cowEnsureExpiresCopy(c->db);
     }
 #endif
     server.dirty += dictSize(c->db->dict);
@@ -482,6 +485,22 @@ time_t getExpire(redisDb *db, robj *key) {
     redisAssert(dictFind(db->dict,key->ptr) != NULL);
     return (time_t) dictGetEntryVal(de);
 }
+
+#ifdef _WIN32
+/* Return the expire time of the specified key, or -1 if no expire
+ * is associated with this key (i.e. the key is non volatile)
+   Called from background save - do not try and find key in normal dict,
+    since find on RO dict does not work */
+time_t getExpireForSave(redisDb *db, robj *key) {
+    dictEntry *de;
+
+    /* No expire? return ASAP */
+    if (dictSize(db->expires) == 0 ||
+       (de = dictFind(db->expires,key->ptr)) == NULL) return -1;
+
+    return (time_t) dictGetEntryVal(de);
+}
+#endif
 
 /* Propagate expires into slaves and the AOF file.
  * When a key expires in the master, a DEL operation for this key is sent

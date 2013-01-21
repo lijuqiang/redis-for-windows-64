@@ -501,6 +501,7 @@ int rdbSave(char *filename) {
     char tmpfile[256];
     int j;
     time_t now = time(NULL);
+    dictIterator * expIter = NULL;
 
     snprintf(tmpfile,256,"temp-%d.rdb", (int) getpid());
 #ifdef _WIN32
@@ -524,6 +525,8 @@ int rdbSave(char *filename) {
         d = db->dict;
         if (roDBDictSize(j) == 0) continue;
         di = roDBGetIterator(j);
+        /* to prevent rehash of expires from background thread, get safe iterator */
+        expIter = dictGetSafeIterator(db->expires);
 #else
         d = db->dict;
         if (dictSize(d) == 0) continue;
@@ -546,8 +549,11 @@ int rdbSave(char *filename) {
             int otype;
             
             initStaticStringObject(key,keystr);
+#ifdef _WIN32
+            expiretime = getExpireForSave(db,&key);
+#else
             expiretime = getExpire(db,&key);
-
+#endif
             /* Save the expire time */
             if (expiretime != -1) {
                 /* If this key is already expired skip it */
@@ -571,6 +577,9 @@ int rdbSave(char *filename) {
 #endif
             if (rdbSaveObject(fp,o) == -1) goto werr;
         }
+#ifdef _WIN32
+        if (expIter) dictReleaseIterator(expIter);
+#endif
         roDictReleaseIterator(di);
     }
     /* EOF opcode */
@@ -597,6 +606,9 @@ werr:
     fclose(fp);
     unlink(tmpfile);
     redisLog(REDIS_WARNING,"Write error saving DB on disk: %s", strerror(errno));
+#ifdef _WIN32
+    if (expIter) dictReleaseIterator(expIter);
+#endif
     if (di) roDictReleaseIterator(di);
     return REDIS_ERR;
 }
