@@ -62,6 +62,37 @@
 #define free(ptr) je_free(ptr)
 #endif
 
+#ifdef _WIN32
+#ifdef _WIN64
+/* 64 bit version */
+#define update_zmalloc_stat_alloc(__n,__size) do { \
+    size_t _n = (__n); \
+    if (_n&(sizeof(long)-1)) _n += sizeof(long)-(_n&(sizeof(long)-1)); \
+    InterlockedExchangeAdd64(&used_memory, (LONGLONG)_n); \
+} while(0)
+
+#define update_zmalloc_stat_free(__n) do { \
+    size_t _n = (__n); \
+    if (_n&(sizeof(long)-1)) _n += sizeof(long)-(_n&(sizeof(long)-1)); \
+    InterlockedExchangeAdd64(&used_memory, 0 - (LONGLONG)_n); \
+} while(0)
+#else
+/* 32 bit version */
+#define update_zmalloc_stat_alloc(__n,__size) do { \
+    size_t _n = (__n); \
+    if (_n&(sizeof(long)-1)) _n += sizeof(long)-(_n&(sizeof(long)-1)); \
+    InterlockedExchangeAdd(&used_memory, (LONG)_n); \
+} while(0)
+
+#define update_zmalloc_stat_free(__n) do { \
+    size_t _n = (__n); \
+    if (_n&(sizeof(long)-1)) _n += sizeof(long)-(_n&(sizeof(long)-1)); \
+    InterlockedExchangeAdd(&used_memory, 0 - (LONG)_n); \
+} while(0)
+#endif
+
+static volatile size_t used_memory = 0;
+#else
 #define update_zmalloc_stat_alloc(__n,__size) do { \
     size_t _n = (__n); \
     if (_n&(sizeof(long)-1)) _n += sizeof(long)-(_n&(sizeof(long)-1)); \
@@ -87,6 +118,7 @@
 } while(0)
 
 static size_t used_memory = 0;
+#endif
 static int zmalloc_thread_safe = 0;
 #ifdef _WIN32
 pthread_mutex_t used_memory_mutex;
