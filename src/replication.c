@@ -347,12 +347,21 @@ void replicationAbortSyncTransfer(void) {
 #ifdef _WIN32
     aeWinSocketDetach(server.repl_transfer_s, 1);
     closesocket(server.repl_transfer_s);
+    if (server.repl_transfer_fd != -1) {
+        close(server.repl_transfer_fd);
+        server.repl_transfer_fd = -1;
+    }
+    if (server.repl_transfer_tmpfile != NULL) {
+        unlink(server.repl_transfer_tmpfile);
+        zfree(server.repl_transfer_tmpfile);
+        server.repl_transfer_tmpfile = NULL;
+    }
 #else
     close(server.repl_transfer_s);
-#endif
     close(server.repl_transfer_fd);
     unlink(server.repl_transfer_tmpfile);
     zfree(server.repl_transfer_tmpfile);
+#endif
     server.replstate = REDIS_REPL_CONNECT;
 }
 
@@ -435,6 +444,7 @@ void readSyncBulkPayload(aeEventLoop *el, int fd, void *privdata, int mask) {
 #ifdef _WIN32
         /* Close temp, since rename is unable to delete open file */
         close(server.repl_transfer_fd);
+        server.repl_transfer_fd = -1;
 #endif
         if (rename(server.repl_transfer_tmpfile,server.dbfilename) == -1) {
             redisLog(REDIS_WARNING,"Failed trying to rename the temp DB into dump.rdb in MASTER <-> SLAVE synchronization: %s", strerror(errno));
@@ -455,7 +465,9 @@ void readSyncBulkPayload(aeEventLoop *el, int fd, void *privdata, int mask) {
         }
         /* Final setup of the connected slave <- master link */
         zfree(server.repl_transfer_tmpfile);
-#ifndef _WIN32
+#ifdef _WIN32
+        server.repl_transfer_tmpfile = NULL;
+#else
         /* Moved before rename tmp->db in windows */
         close(server.repl_transfer_fd);
 #endif
