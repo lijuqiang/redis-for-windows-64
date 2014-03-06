@@ -300,15 +300,25 @@ BOOL QForkMasterInit( __int64 maxmemoryBytes, bool bypassSystemReserve ) {
 			throw system_error(GetLastError(), system_category(), "GetPerformanceInfo failed");
 		}
 		SIZE_T maxSystemReservePages = 3i64 * 1024i64 * 1024i64 * 1024i64 / pageSize;
+#if COMMIT_ALL_PAGES
 		SIZE_T twentyPercentPhysical = (perfinfo.PhysicalTotal * 2i64) / 10i64;
 		SIZE_T maxPhysicalPagesToUse = perfinfo.PhysicalTotal - min(maxSystemReservePages, bypassSystemReserve ? 0 : twentyPercentPhysical);
+		ULONG secFlags = 0;
+#else
+		SIZE_T maxPhysicalPagesToUse = perfinfo.PhysicalTotal * 2i64;
+		ULONG secFlags = SEC_RESERVE;
+#endif
         SIZE_T maxPhysicalMapping = maxPhysicalPagesToUse * pageSize;
         if (maxmemoryBytes != -1) {
 			SIZE_T allocationBlocks = maxmemoryBytes / cAllocationGranularity;
 			allocationBlocks += ((maxmemoryBytes % cAllocationGranularity) != 0);
-			allocationBlocks = (SIZE_T)ceil(allocationBlocks * 1.5);				// extra reserve for fragmentation
 			allocationBlocks = max(2, allocationBlocks);
+#if COMMIT_ALL_PAGES
+			allocationBlocks = (SIZE_T)ceil(allocationBlocks * 1.5);				// extra reserve for fragmentation
 			maxPhysicalMapping = min(maxPhysicalMapping,allocationBlocks * cAllocationGranularity);
+#else
+			maxPhysicalMapping = allocationBlocks * cAllocationGranularity;
+#endif
         }
         g_pQForkControl->availableBlocksInHeap = (int)(maxPhysicalMapping / cAllocationGranularity);
         if (g_pQForkControl->availableBlocksInHeap <= 0) {
@@ -345,7 +355,7 @@ BOOL QForkMasterInit( __int64 maxmemoryBytes, bool bypassSystemReserve ) {
             CreateFileMappingW( 
                 g_pQForkControl->heapMemoryMapFile,
                 NULL,
-                PAGE_READWRITE,
+                PAGE_READWRITE | secFlags,
                 HIDWORD(mmSize),
                 LODWORD(mmSize),
                 NULL);
@@ -363,7 +373,7 @@ BOOL QForkMasterInit( __int64 maxmemoryBytes, bool bypassSystemReserve ) {
             GetCurrentProcess(),
             NULL,
             mmSize,
-            MEM_RESERVE | MEM_COMMIT | MEM_TOP_DOWN, 
+            MEM_RESERVE | MEM_TOP_DOWN, 
             PAGE_READWRITE);
         if (pHigh == NULL) {
             throw std::system_error(
@@ -992,6 +1002,19 @@ LPVOID AllocHeapBlock(size_t size, BOOL allocateHigh) {
         LPVOID blockStart = 
             reinterpret_cast<byte*>(g_pQForkControl->heapStart) + 
             (g_pQForkControl->heapBlockSize * allocationStart);
+#if COMMIT_ALL_PAGES
+#else
+		LPVOID pActual = VirtualAllocEx( 
+            GetCurrentProcess(),
+            blockStart,
+            g_pQForkControl->heapBlockSize * contiguousBlocksToAllocate,
+            MEM_COMMIT, 
+            PAGE_READWRITE);
+        if (pActual == NULL || pActual != blockStart) {
+			contiguousBlocksFound = 0;
+	        errno = ENOMEM;
+        }
+#endif
         for(int n = 0; n < contiguousBlocksToAllocate; n++ ) {
             g_pQForkControl->heapBlockMap[allocationStart+n] = BlockState::bsMAPPED;
             blocksMapped++;
