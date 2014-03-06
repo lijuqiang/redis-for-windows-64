@@ -64,3 +64,9 @@ msvs/RedisWAInst/src/RedisInstWA/obj/
 msvs/RedisWAInst/src/RedisServer/bin/
 msvs/RedisWAInst/src/RedisServer/obj/
 
+*.dll
+*.exe
+**/x64
+**/Release
+**/Debug_IOCP
+**/Debug

@@ -23,6 +23,7 @@
 #pragma comment (lib, "ws2_32.lib")
 #define FD_SETSIZE 64000
 #include <WinSock2.h>
+#include <mswsock.h>
 #include <WS2tcpip.h>
 #include "APIBridge.h"
 #include <io.h>
@@ -62,6 +63,80 @@ int APIBridge::WSARecv(SOCKET s,LPWSABUF lpBuffers,DWORD dwBufferCount,LPDWORD l
 
 int APIBridge::WSAPoll(WSAPOLLFD fdarray[],ULONG nfds,INT timeout){
     return ::WSAPoll(fdarray,nfds,timeout);
+}
+
+BOOL APIBridge::AcceptEx(SOCKET sListen,SOCKET sAccept,PVOID lpOutputBuffer,DWORD dwReceiveDataLength,DWORD dwLocalAddressLength,DWORD dwRemoteAddressLength,LPDWORD lpdwBytesReceived,LPOVERLAPPED lpOverlapped)
+{
+    if( sListen != INVALID_SOCKET &&  sAccept != INVALID_SOCKET) {
+        LPFN_ACCEPTEX acceptex;
+        const GUID wsaid_acceptex = WSAID_ACCEPTEX;
+        DWORD bytes;
+
+        if( SOCKET_ERROR == 
+                ::WSAIoctl(sListen,
+                            SIO_GET_EXTENSION_FUNCTION_POINTER,
+                            (void *)&wsaid_acceptex,
+                            sizeof(GUID),
+                            &acceptex,
+                            sizeof(LPFN_ACCEPTEX),
+                            &bytes,
+                            NULL,
+                            NULL)) {
+            return FALSE;
+        }
+
+        return acceptex(sListen, sAccept, lpOutputBuffer,dwReceiveDataLength, dwLocalAddressLength, dwRemoteAddressLength, lpdwBytesReceived, lpOverlapped);
+    }
+    return FALSE;
+}
+
+BOOL APIBridge::ConnectEx(SOCKET s,const struct sockaddr *name,int namelen,PVOID lpSendBuffer,DWORD dwSendDataLength,LPDWORD lpdwBytesSent,LPOVERLAPPED lpOverlapped)
+{
+    if( s != INVALID_SOCKET) {
+        LPFN_CONNECTEX connectex;
+        const GUID wsaid_connectex = WSAID_CONNECTEX;
+        DWORD bytes;
+
+        if( SOCKET_ERROR == 
+                ::WSAIoctl(s,
+                            SIO_GET_EXTENSION_FUNCTION_POINTER,
+                            (void *)&wsaid_connectex,
+                            sizeof(GUID),
+                            &connectex,
+                            sizeof(LPFN_ACCEPTEX),
+                            &bytes,
+                            NULL,
+                            NULL)) {
+            return FALSE;
+        }
+
+        return connectex(s,name,namelen,lpSendBuffer,dwSendDataLength,lpdwBytesSent,lpOverlapped);
+    }
+    return FALSE;
+}
+
+void APIBridge::GetAcceptExSockaddrs(SOCKET s,PVOID lpOutputBuffer,DWORD dwReceiveDataLength,DWORD dwLocalAddressLength,DWORD dwRemoteAddressLength,LPSOCKADDR *LocalSockaddr,LPINT LocalSockaddrLength,LPSOCKADDR *RemoteSockaddr,LPINT RemoteSockaddrLength)
+{
+    if( s != INVALID_SOCKET) {
+        LPFN_GETACCEPTEXSOCKADDRS getacceptsockaddrs;
+        const GUID wsaid_getacceptsockaddrs = WSAID_GETACCEPTEXSOCKADDRS;
+        DWORD bytes;
+
+        if( SOCKET_ERROR == 
+                ::WSAIoctl(s,
+                            SIO_GET_EXTENSION_FUNCTION_POINTER,
+                            (void *)&wsaid_getacceptsockaddrs,
+                            sizeof(GUID),
+                            &getacceptsockaddrs,
+                            sizeof(LPFN_ACCEPTEX),
+                            &bytes,
+                            NULL,
+                            NULL)) {
+            return;
+        }
+
+        return getacceptsockaddrs(lpOutputBuffer,dwReceiveDataLength,dwLocalAddressLength,dwRemoteAddressLength,LocalSockaddr,LocalSockaddrLength,RemoteSockaddr,RemoteSockaddrLength);
+    }
 }
 
 SOCKET APIBridge::socket(int af,int type,int protocol) {

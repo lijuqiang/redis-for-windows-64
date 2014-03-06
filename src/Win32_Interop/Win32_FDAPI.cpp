@@ -129,26 +129,7 @@ BOOL FDAPI_AcceptEx(int listenFD,int acceptFD,PVOID lpOutputBuffer,DWORD dwRecei
     {
         SOCKET sListen = RFDMap::getInstance().lookupSocket(listenFD);
         SOCKET sAccept = RFDMap::getInstance().lookupSocket(acceptFD);
-        if( sListen != INVALID_SOCKET &&  sAccept != INVALID_SOCKET) {
-            LPFN_ACCEPTEX acceptex;
-            const GUID wsaid_acceptex = WSAID_ACCEPTEX;
-            DWORD bytes;
-
-            if( SOCKET_ERROR == 
-                    WSAIoctl(listenFD,
-                             SIO_GET_EXTENSION_FUNCTION_POINTER,
-                             (void *)&wsaid_acceptex,
-                             sizeof(GUID),
-                             &acceptex,
-                             sizeof(LPFN_ACCEPTEX),
-                             &bytes,
-                             NULL,
-                             NULL)) {
-                return FALSE;
-            }
-
-            return acceptex(sListen, sAccept, lpOutputBuffer,dwReceiveDataLength, dwLocalAddressLength, dwRemoteAddressLength, lpdwBytesReceived, lpOverlapped);
-        }
+		return APIBridge::AcceptEx(sListen, sAccept, lpOutputBuffer,dwReceiveDataLength,dwLocalAddressLength,dwRemoteAddressLength,lpdwBytesReceived,lpOverlapped);
     } CATCH_AND_REPORT()
 
     return FALSE;
@@ -159,26 +140,7 @@ BOOL FDAPI_ConnectEx(int fd,const struct sockaddr *name,int namelen,PVOID lpSend
     try
     {
         SOCKET s = RFDMap::getInstance().lookupSocket(fd);
-        if( s != INVALID_SOCKET) {
-            LPFN_CONNECTEX connectex;
-            const GUID wsaid_connectex = WSAID_CONNECTEX;
-            DWORD bytes;
-
-            if( SOCKET_ERROR == 
-                    WSAIoctl(fd,
-                             SIO_GET_EXTENSION_FUNCTION_POINTER,
-                             (void *)&wsaid_connectex,
-                             sizeof(GUID),
-                             &connectex,
-                             sizeof(LPFN_ACCEPTEX),
-                             &bytes,
-                             NULL,
-                             NULL)) {
-                return FALSE;
-            }
-
-            return connectex(s,name,namelen,lpSendBuffer,dwSendDataLength,lpdwBytesSent,lpOverlapped);
-        }
+		return APIBridge::ConnectEx(s,name,namelen,lpSendBuffer,dwSendDataLength,lpdwBytesSent,lpOverlapped);
     } CATCH_AND_REPORT()
 
     return FALSE;
@@ -189,26 +151,7 @@ void FDAPI_GetAcceptExSockaddrs(int fd,PVOID lpOutputBuffer,DWORD dwReceiveDataL
     try
     {
         SOCKET s = RFDMap::getInstance().lookupSocket(fd);
-        if( s != INVALID_SOCKET) {
-            LPFN_GETACCEPTEXSOCKADDRS getacceptsockaddrs;
-            const GUID wsaid_getacceptsockaddrs = WSAID_GETACCEPTEXSOCKADDRS;
-            DWORD bytes;
-
-            if( SOCKET_ERROR == 
-                    WSAIoctl(fd,
-                             SIO_GET_EXTENSION_FUNCTION_POINTER,
-                             (void *)&wsaid_getacceptsockaddrs,
-                             sizeof(GUID),
-                             &getacceptsockaddrs,
-                             sizeof(LPFN_ACCEPTEX),
-                             &bytes,
-                             NULL,
-                             NULL)) {
-                return;
-            }
-
-            return getacceptsockaddrs(lpOutputBuffer,dwReceiveDataLength,dwLocalAddressLength,dwRemoteAddressLength,LocalSockaddr,LocalSockaddrLength,RemoteSockaddr,RemoteSockaddrLength);
-        }
+		return APIBridge::GetAcceptExSockaddrs(s,lpOutputBuffer,dwReceiveDataLength,dwLocalAddressLength,dwRemoteAddressLength,LocalSockaddr,LocalSockaddrLength,RemoteSockaddr,RemoteSockaddrLength);
     } CATCH_AND_REPORT()
 }
 
@@ -218,7 +161,7 @@ int FDAPI_UpdateAcceptContext(int fd)
     {
         SOCKET s = RFDMap::getInstance().lookupSocket(fd);
         if( s != INVALID_SOCKET) {
-            return setsockopt(fd,
+            return APIBridge::setsockopt(s,
                         SOL_SOCKET,
                         SO_UPDATE_ACCEPT_CONTEXT,
                         (char*)&s,
