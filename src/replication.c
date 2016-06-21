@@ -1639,6 +1639,32 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
         server.repl_state = REDIS_REPL_SEND_PSYNC;
     }
 
+    /* Inform the master of our capabilities. While we currently send
+     * just one capability, it is possible to chain new capabilities here
+     * in the form of REPLCONF capa X capa Y capa Z ...
+     * The master will ignore capabilities it does not understand. */
+    if (server.repl_state == REDIS_REPL_SEND_CAPA) {
+        err = sendSynchronousCommand(SYNC_CMD_WRITE,fd,"REPLCONF",
+                "capa","eof",NULL);
+        if (err) goto write_error;
+        sdsfree(err);
+        server.repl_state = REDIS_REPL_RECEIVE_CAPA;
+        return;
+    }
+
+    /* Receive CAPA reply. */
+    if (server.repl_state == REDIS_REPL_RECEIVE_CAPA) {
+        err = sendSynchronousCommand(SYNC_CMD_READ,fd,NULL);
+        /* Ignore the error if any, not all the Redis versions support
+         * REPLCONF capa. */
+        if (err[0] == '-') {
+            redisLog(REDIS_NOTICE,"(Non critical) Master does not understand "
+                                  "REPLCONF capa: %s", err);
+        }
+        sdsfree(err);
+        server.repl_state = REDIS_REPL_SEND_PSYNC;
+    }
+
     /* Try a partial resynchonization. If we don't have a cached master
      * slaveTryPartialResynchronization() will at least try to use PSYNC
      * to start a full resynchronization so that we get the master run id

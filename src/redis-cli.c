@@ -497,7 +497,7 @@ static sds cliFormatReplyTTY(redisReply *r, char *prefix) {
             _prefix = sdscat(sdsnew(prefix),_prefixlen);
 
             /* Setup prefix format for every entry */
-            snprintf(_prefixfmt,sizeof(_prefixfmt),"%%s%%%dd) ",idxlen);
+            snprintf(_prefixfmt,sizeof(_prefixfmt),"%%s%%%ud) ",idxlen);
 
             for (i = 0; i < r->elements; i++) {
                 /* Don't use the prefix for the first element, as the parent
@@ -636,7 +636,7 @@ static int cliReadReply(int output_raw_strings) {
         p = strchr(s+1,' ');    /* MOVED[S]3999[P]127.0.0.1:6381 */
         *p = '\0';
         slot = atoi(s+1);
-        s = strchr(p+1,':');    /* MOVED 3999[P]127.0.0.1[S]6381 */
+        s = strrchr(p+1,':');    /* MOVED 3999[P]127.0.0.1[S]6381 */
         *s = '\0';
         sdsfree(config.hostip);
         config.hostip = sdsnew(p+1);
@@ -959,7 +959,8 @@ static void usage(void) {
 "  (Note: when using --eval the comma separates KEYS[] from ARGV[] items)\n"
 "\n"
 "When no command is given, redis-cli starts in interactive mode.\n"
-"Type \"help\" in interactive mode for information on available commands.\n"
+"Type \"help\" in interactive mode for information on available commands\n"
+"and settings.\n"
 "\n",
         version, REDIS_CLI_DEFAULT_PIPE_TIMEOUT);
     sdsfree(version);
@@ -1029,6 +1030,7 @@ static void repl(void) {
         if (line[0] != '\0') {
             argv = sdssplitargs(line,&argc);
             if (history) linenoiseHistoryAdd(line);
+            printf("HISTORY: %s\n", historyfile);
             if (historyfile) linenoiseHistorySave(historyfile);
 
             if (argv == NULL) {
@@ -1926,7 +1928,7 @@ void bytesToHuman(char *s, PORT_LONGLONG n) {
     }
     if (n < 1024) {
         /* Bytes */
-        sprintf(s,"%lluB",n);
+        sprintf(s,"%lldB",n);
         return;
     } else if (n < (1024*1024)) {
         d = (double)n/(1024);
@@ -2207,7 +2209,7 @@ static void intrinsicLatencyMode(void) {
         }
 
         double avg_us = (double)run_time/runs;
-        double avg_ns = avg_us * 10e3;
+        double avg_ns = avg_us * 1e3;
         if (force_cancel_loop || end > test_end) {
             printf("\n%lld total runs "
                 "(avg latency: "
