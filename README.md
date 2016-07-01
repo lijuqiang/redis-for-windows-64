@@ -1,5 +1,8 @@
 [![Windows Status](http://img.shields.io/appveyor/ci/MSOpenTech-lab/redis.svg?style=flat-square)](https://ci.appveyor.com/project/MSOpenTech-lab/redis) [![NuGet version](http://img.shields.io/nuget/v/redis-64.svg?style=flat-square)](http://www.nuget.org/packages/redis-64/) [![Chocolatey version](http://img.shields.io/chocolatey/v/redis-64.svg?style=flat-square)](http://www.chocolatey.org/packages/redis-64/) [![Chocolatey downloads](http://img.shields.io/chocolatey/dt/redis-64.svg?style=flat-square)](http://www.chocolatey.org/packages/redis-64/)
 
+# THIS IS AN UNSTABLE MERGE of the 3.0.7 branch from antirez/redis/3.0
+# There is a known issue that causes a cluster test (04-resharding.tcl) to fail.
+
 ## Redis on Windows 
 
 - This is a port for Windows based on [Redis](https://github.com/antirez/redis).
