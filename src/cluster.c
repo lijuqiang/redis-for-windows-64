@@ -3015,6 +3015,7 @@ void clusterHandleSlaveMigration(int max_slaves) {
             node->orphaned_time = 0;
         }
 
+
         /* Check if I'm the slave candidate for the migration: attached
          * to a master with the maximum number of slaves and with the smallest
          * node ID. */
